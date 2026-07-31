@@ -15,11 +15,10 @@ type LogEntry struct {
 }
 
 type BroadcastHandler struct {
-	mu      sync.RWMutex
-	subs    []chan LogEntry
-	writer  io.Writer
-	level   slog.Level
-	formatter func(slog.Record) LogEntry
+	mu     sync.RWMutex
+	subs   []chan LogEntry
+	writer io.Writer
+	level  slog.Level
 }
 
 func NewBroadcastHandler(w io.Writer, level slog.Level) *BroadcastHandler {
@@ -84,4 +83,35 @@ func (h *BroadcastHandler) SetLevel(level slog.Level) {
 	h.mu.Lock()
 	h.level = level
 	h.mu.Unlock()
+}
+
+type MultiHandler struct {
+	*BroadcastHandler
+	writer *RotateWriter
+}
+
+func NewLogger(dataDir, level string, maxFiles int, maxSizeMB int64) (*MultiHandler, error) {
+	w, err := NewRotateWriter(dataDir, "bdriper.log", maxFiles, maxSizeMB)
+	if err != nil {
+		return nil, err
+	}
+	var l slog.Level
+	switch level {
+	case "debug":
+		l = slog.LevelDebug
+	case "info":
+		l = slog.LevelInfo
+	case "warn":
+		l = slog.LevelWarn
+	case "error":
+		l = slog.LevelError
+	default:
+		l = slog.LevelInfo
+	}
+	bh := NewBroadcastHandler(w, l)
+	return &MultiHandler{BroadcastHandler: bh, writer: w}, nil
+}
+
+func (m *MultiHandler) Rotate() {
+	m.writer.Rotate()
 }

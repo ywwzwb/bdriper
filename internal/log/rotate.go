@@ -61,6 +61,12 @@ func (rw *RotateWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
+func (rw *RotateWriter) Rotate() {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+	rw.rotate()
+}
+
 func (rw *RotateWriter) rotate() {
 	ts := time.Now().Format("2006-01-02-150405")
 	oldPath := filepath.Join(rw.dir, rw.baseName)
