@@ -1,0 +1,29 @@
+{
+  "name": "x264 High Quality (mbtree on)",
+  "encoder": "x264",
+  "mode": "cpu",
+  "description": "高质量动漫 BDRip。CRF=16.5, mbtree 开启, aq-mode=3。",
+  "params": {
+    "crf": 16.5,
+    "preset": "veryslow",
+    "deblock": "-1:-1",
+    "keyint": 600,
+    "min-keyint": 1,
+    "bframes": 8,
+    "ref": 13,
+    "qcomp": 0.75,
+    "aq-mode": 3,
+    "aq-strength": 0.8,
+    "mbtree": true,
+    "me": "tesa",
+    "subme": 10,
+    "me_range": 24,
+    "psy-rd": 0.6,
+    "psy-trellis": 0.15,
+    "no-fast-pskip": true,
+    "colormatrix": "bt709",
+    "input-depth": 16,
+    "threads": 16,
+    "rc-lookahead": 70
+  }
+}

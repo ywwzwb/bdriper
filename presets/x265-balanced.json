@@ -1,0 +1,31 @@
+{
+  "name": "x265 Balanced",
+  "encoder": "x265",
+  "mode": "cpu",
+  "description": "均衡画质与速度的 x265 配置。CRF=18, aq-mode=2。",
+  "params": {
+    "crf": 18.0,
+    "preset": "slow",
+    "deblock": "-1:-1",
+    "ctu": 32,
+    "qg-size": 8,
+    "me": "star",
+    "subme": 3,
+    "merange": 38,
+    "bframes": 6,
+    "ref": 4,
+    "qcomp": 0.6,
+    "aq-mode": 2,
+    "aq-strength": 0.9,
+    "no-sao": true,
+    "psy-rd": 2.0,
+    "psy-rdoq": 1.0,
+    "rdoq-level": 2,
+    "keyint": 360,
+    "min-keyint": 1,
+    "no-open-gop": true,
+    "pbratio": 1.2,
+    "cbqpoffs": -2,
+    "crqpoffs": -2
+  }
+}
