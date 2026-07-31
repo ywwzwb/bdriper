@@ -1,9 +1,11 @@
 package task
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 type PipelineConfig struct {
@@ -46,16 +48,41 @@ func extractStreams(cfg PipelineConfig) ([]*exec.Cmd, error) {
 }
 
 func encodeVideo(cfg PipelineConfig) (*exec.Cmd, error) {
-	videoOut := fmt.Sprintf("%s_video.mkv", filepath.Join(cfg.OutputDir, filepath.Base(cfg.SourceFile)))
+	videoOut := fmt.Sprintf("%s_video.265", filepath.Join(cfg.OutputDir, filepath.Base(cfg.SourceFile)))
 
 	if cfg.VideoEncoder == "x264" || cfg.VideoEncoder == "x265" {
+		var params map[string]any
+		json.Unmarshal([]byte(cfg.VideoParams), &params)
+
+		var flags []string
+		for k, v := range params {
+			switch val := v.(type) {
+			case bool:
+				if val {
+					flags = append(flags, fmt.Sprintf("--%s", k))
+				} else {
+					flags = append(flags, fmt.Sprintf("--no-%s", k))
+				}
+			case float64:
+				if val == float64(int(val)) {
+					flags = append(flags, fmt.Sprintf("--%s", k), fmt.Sprintf("%d", int(val)))
+				} else {
+					flags = append(flags, fmt.Sprintf("--%s", k), fmt.Sprintf("%.1f", val))
+				}
+			case string:
+				flags = append(flags, fmt.Sprintf("--%s", k), val)
+			}
+		}
+
+		encoderArgs := strings.Join(flags, " ")
 		return exec.Command("bash", "-c", fmt.Sprintf(
-			"ffmpeg -i %s -f yuv4mpegpipe -pix_fmt yuv420p10le -strict -1 - | %s --y4m %s -o %s -",
-			cfg.SourceFile, cfg.VideoEncoder, cfg.VideoParams, videoOut,
+			"ffmpeg -i %s -f yuv4mpegpipe -pix_fmt yuv420p10le -strict -1 - 2>/dev/null | %s --y4m %s -o %s -",
+			cfg.SourceFile, cfg.VideoEncoder, encoderArgs, videoOut,
 		)), nil
 	}
 
 	return exec.Command("ffmpeg",
+		"-hwaccel", "auto",
 		"-i", cfg.SourceFile,
 		"-c:v", cfg.VideoEncoder,
 		"-y", videoOut,

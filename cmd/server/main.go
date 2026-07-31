@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -32,11 +34,18 @@ func main() {
 		panic("failed to open database: " + err.Error())
 	}
 
-	bw := log.NewBroadcastHandler(os.Stdout, slog.LevelInfo)
-	logger := slog.New(bw)
+	logHandler, err := log.NewLogger(filepath.Join(dataDir, "logs"), "info", 5, 10)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
+		os.Exit(1)
+	}
+	logger := slog.New(logHandler)
+
+	taskHub := api.NewHub()
 
 	maxConcurrent := getEnvInt("MAX_CONCURRENT", 2)
-	runner := task.NewRunner(database, logger, maxConcurrent)
+	hubAdapter := &taskHubAdapter{hub: taskHub}
+	runner := task.NewRunner(database, logger, hubAdapter, maxConcurrent)
 
 	presetsDir := os.Getenv("BDRI_PER_PRESETS_DIR")
 	if presetsDir == "" {
@@ -51,8 +60,8 @@ func main() {
 	srv := &api.Server{
 		DB:         database,
 		Logger:     logger,
-		LogHandler: bw,
-		TaskHub:    api.NewHub(),
+		LogHandler: logHandler,
+		TaskHub:    taskHub,
 		LogHub:     api.NewHub(),
 		Runner:     runner,
 		DataDir:    dataDir,
@@ -103,6 +112,18 @@ func mustUserHomeDir() string {
 		return "/tmp"
 	}
 	return home
+}
+
+type taskHubAdapter struct {
+	hub *api.Hub
+}
+
+func (a *taskHubAdapter) BroadcastProgress(taskID int64, progress float64) {
+	data, _ := json.Marshal(map[string]any{
+		"task_id":  taskID,
+		"progress": progress,
+	})
+	a.hub.Broadcast(api.Event{Type: "progress", Data: data})
 }
 
 func withMiddleware(next http.Handler) http.Handler {

@@ -34,7 +34,7 @@ func (s *Server) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 		Duration:   input.Duration,
 		OutputFile: outputFile,
 		Status:     "running",
-		ExpiresAt:  time.Now().Add(24 * time.Hour),
+		ExpiresAt:  time.Now().Add(30 * time.Minute),
 	}
 
 	id, err := db.CreatePreview(s.DB, pj)

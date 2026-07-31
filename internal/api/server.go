@@ -13,7 +13,7 @@ import (
 type Server struct {
 	DB         *sql.DB
 	Logger     *slog.Logger
-	LogHandler *log.BroadcastHandler
+	LogHandler *log.MultiHandler
 	TaskHub    *Hub
 	LogHub     *Hub
 	Runner     *task.Runner
