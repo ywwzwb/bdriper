@@ -1,31 +1,56 @@
-# x264 Encoder Parameters
+# x264 编码参数说明
 
-## Basic Settings
-- **crf** — Constant Rate Factor (0-51, default 23). Lower = better quality, larger file. Anime BD: 16-18.
-- **preset** — Speed/quality tradeoff. ultrafast to placebo. Recommended: slower or veryslow.
-- **tune** — Source type optimization: film, animation, grain, stillimage.
+## 基础设置
 
-## Frame Types
-- **keyint** — Max GOP size (IDR frame interval). Default 250. Recommended: 600 for 24fps.
-- **bframes** — Max consecutive B-frames. Anime: 8-12, Film: 4-8.
-- **ref** — Reference frames. Higher = better compression, slower decode. Recommended: 6-13.
+- **crf** — 固定质量模式（0-51，默认 23）。值越低质量越高，体积越大。动漫蓝光 BDRip 建议 16-18。crf 模式下码率的时间分配效果最佳，是最常用也是推荐的模式。
+- **preset** — 编码效率预设。从 ultrafast（最快）到 placebo（最慢）。推荐使用 slow、slower 或 veryslow。preset 越高（越慢），单位码率能达到的画质越好。
+- **tune** — 画质预设。告诉 x264 优化哪种片源类型：
+  - **animation**：动漫、动画（注意：高质量 BDRip 实际并不推荐直接用此预设）
+  - **film**：电影、真人特典、演唱会
+  - **grain**：噪点明显的源，致力于保留噪点。搭配低 crf 时体积惊人
+  - **stillimage**：静态画面、相册类片源
 
-## Rate Control
-- **qcomp** — Temporal rate control (0-1). Default 0.6. Higher = more consistent quality. 0.7-0.8 with mbtree on.
-- **aq-mode** — Adaptive quantization mode. 1=default, 2=auto-variance, 3=auto-variance + bias (best for anime).
-- **aq-strength** — AQ strength (0-3). Anime: 0.6-1.0, recommend 0.8.
-- **mbtree** — Macroblock tree rate control. On for most use. Off for very high bitrate (crf < 16).
+## 帧类型
 
-## Motion Estimation
-- **me** — Motion estimation algorithm. dia < hex < umh < esa < tesa. Recommended: umh or tesa.
-- **subme** — Subpixel refinement (0-11). Recommended: 10.
-- **me_range** — Search range. 1080p: 24-32.
+- **keyint** — 最大 GOP 区间（IDR 帧间距，单位帧）。默认 250。推荐 24fps 视频设为 600。设置过大会导致拖动进度条卡顿。
+- **min-keyint** — 最小 GOP 区间。推荐设为 1，所有 I 帧都作为 IDR 帧。
+- **bframes** — 最大连续 B 帧数。动漫建议 8-12，真人电影 4-8。值越大编码时间略增，对压缩率有帮助。
+- **ref** — 参考帧数。越高压缩率越好但解码压力越大。推荐动漫设 6-13。ref 对编码时间的影响是线性的，但额外收益递减。
+- **b-adapt** — B 帧决策算法。0=关闭，1=快速，2=标准。推荐 2。
+- **open-gop** — 开启则前一个 GOP 的 B 帧可参考下一个 GOP 中的帧。一般建议关闭以兼容性为优先。
 
-## Psycho-visual
-- **psy-rd** — Psycho-visual optimization. Retains texture detail. Anime: 0.4-1.0.
-- **psy-trellis** — Fine detail retention. With mbtree: 0.1-0.15. Without: 0.
+## 码率控制
 
-## Other
-- **deblock** — Deblocking filter (alpha:beta). High quality: -1:-1. Default: 0:0.
-- **colormatrix** — Color matrix. BD: bt709.
-- **threads** — Thread count. Keep ≤ 16.
+- **qcomp** — 码率时域分配灵活度（0-1）。默认 0.6。开 mbtree 时建议调高至 0.7-0.8。值越高画质时域一致性越好，高画质编码应调高。
+- **aq-mode** — 自适应量化模式。防止平面和纹理处码率过低：
+  - **1** (Variance AQ)：最安全稳定，适合真人
+  - **2** (Auto-Variance AQ)：比较省码率，偶尔出现烂帧
+  - **3** (Auto-Variance + Bias)：最适合动漫，码率稍高
+- **aq-strength** — AQ 强度。动漫 0.6-1.0，推荐 0.8。真人 0.8-1.2。高质量编码应该更高。
+- **mbtree** — 宏块树码率控制。作用原理：被大量参照的 block 给更低 QP（更好画质），被参照少的给更高 QP。利弊：
+  - 中低码率 (crf > 18)：开启，利大于弊
+  - 高码率 (crf 16-18)：视片源而定
+  - 极高码率 (crf < 16)：关闭，弊大于利
+- **rc-lookahead** — 前瞻帧数。一般设为帧率的 2-3 倍，24fps 推荐 70。
+
+## 运动估计
+
+- **me** — 运动搜索算法。效率递增：dia → hex → umh → esa → tesa。日常推荐 umh，追求极致推荐 tesa。tesa 比 umh 提升 5-10%，但时间是 150-200%。
+- **subme** — 亚像素优化级别（0-11）。追求速度推荐 7，追求质量推荐 10。
+- **me_range** — 搜索范围。720p 推荐 16-24，1080p 推荐 24-32。
+- **merange** — 同上，x265 中的写法。
+
+## 心理视觉
+
+- **psy-rd** — 心理视觉优化强度。在欠码时人眼宁愿看到失真也不愿看到模糊。动漫 0.4-1.0，真人 0.7-1.3。高质量编码可以开更高。
+- **psy-trellis** — 微小细节（噪点）保留度。开 mbtree 时推荐 0.1-0.15，关 mbtree 时推荐 0。
+- **no-fast-pskip** — 关闭快速 P Skip 以换取质量。高质量编码推荐开启（即 `--no-fast-pskip`）。
+
+## 其他
+
+- **deblock** — 去色块滤波器 (alpha:beta)。范围 -3:3 到 3:3。高画质编码（高码率）建议调低至 -1:-1。默认 0:0 已是合理选择。
+- **colormatrix** — 色彩矩阵。蓝光原盘统一用 bt709。
+- **chroma-qp-offset** — 色度平面 QP 偏移。关闭 mbtree 时手动设为 -1 以保证色度画质。
+- **input-depth** — 输入精度。配合高位深输入用，一般设为 16。
+- **threads** — 线程数。建议不超过 16，过高对画质有负面影响。默认 0 让 x264 自动计算。
+- **no-dct-decimation** — 关闭 DCT 抽取。一般保持默认（开启）。

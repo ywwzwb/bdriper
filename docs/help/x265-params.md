@@ -1,37 +1,59 @@
-# x265 Encoder Parameters
+# x265 编码参数说明
 
-## Basic Settings
-- **crf** — Constant Rate Factor (default 28). High quality: 15-18.
-- **preset** — Speed/quality. ultrafast to placebo. Recommended: slow or slower.
+## 基础设置
 
-## Frame & Block
-- **ctu** — Max coding unit size. 1080p: 32 (recommended, not 64).
-- **qg-size** — QP group size. Lower = better quality + bitrate. Recommended: 8.
-- **bframes** — Max consecutive B-frames. Recommended: 6-10.
-- **ref** — Reference frames. Recommended: 4-5 (less important than x264).
+- **crf** — 固定质量模式。默认 28（为低码率优化）。高质量动漫编码建议至少 18 起，高画质 BDRip 推荐 15-16。
+- **preset** — 编码效率预设。从 ultrafast 到 placebo。新手建议直接使用官方 preset。推荐 slow 或 slower。
 
-## Rate Control
-- **qcomp** — Temporal rate control. Recommended: 0.65.
-- **aq-mode** — AQ mode. 1=high quality, 2=efficient, 3=dark scenes. Recommend: 1 or 2.
-- **aq-strength** — AQ strength. Mode 1: 0.8, Mode 2: 0.9.
-- **no-sao** — Disable SAO (Sample Adaptive Offset). Recommended ON for high quality (SAO causes blurring).
+## 帧与分块
 
-## Motion & Analysis
-- **me** — Motion estimation. 0=dia, 1=hex, 2=umh, 3=star. Recommended: 3 (star).
-- **subme** — Subpixel refinement. Recommended: 5.
-- **merange** — Search range. Recommended: 38 for 1080p.
+- **ctu** — 最大编码单元尺寸。x265 允许 64x64，但 1080p 及以下分辨率限制为 32 效果更好（过大的 TU 增加平面涂抹和运算量，降低多线程优化）。
+- **qg-size** — QP 调整最小单位。值越低（如 8），x265 在一帧内调整 QP 的灵活度越高。推荐 8。
+- **bframes** — 最大连续 B 帧数。推荐 6-10。
+- **ref** — 参考帧数。x265 中 ref 增加作用不如 x264 明显，不建议超过 6。推荐 4-5。
+- **weightb** — 允许 B 帧加权预测。渐变场景有帮助，推荐开启。
+- **b-intra** — 允许 B 帧中出现 Intra Block。动漫推荐开启。
 
-## Psycho-visual
-- **psy-rd** — Detail/sharpness retention (default 2.0). Lower for low bitrate: 1.5.
-- **psy-rdoq** — Fine detail in RDOQ. Recommended: 1.0.
-- **rdoq-level** — RDOQ level. 0=off, 1=partial, 2=full. Recommended: 2 (auto-enabled slow+).
+## 码率控制
 
-## Chroma
-- **cbqpoffs** — Cb chroma QP offset. Recommended: -2.
-- **crqpoffs** — Cr chroma QP offset. Recommended: -2.
+- **qcomp** — 码率时域分配灵活度。默认 0.6。中高画质推荐略高至 0.65。
+- **aq-mode** — 自适应量化模式：
+  - **1**：最安全稳定，适合高码率/高画质编码（推荐 crf ≤ 16 时使用）
+  - **2**：效率最高，适合中低码率
+  - **3**：对暗场加强，适合 8bit 编码防止暗场压烂
+- **aq-strength** — AQ 强度。aq-mode=1 推荐 0.8，aq-mode=2 推荐 0.9，aq-mode=3 推荐 0.7。
+- **no-sao** — 关闭 SAO（Sample Adaptive Offset）。SAO 虽然可以减少欠码瑕疵（如 DCT ringing），但代价是极其暴力的涂抹效果。**高画质编码强烈建议关闭**（即使用 `--no-sao`）。
+- **rc-lookahead** — 前瞻帧数。推荐 60-80。
 
-## Other
-- **deblock** — Deblocking filter. High quality: -1:-1.
-- **keyint** — Max GOP size. Recommended: 360.
-- **pbratio** — P/B frame quality ratio. Anime: 1.2.
-- **no-open-gop** — Disable open GOP. Recommended ON.
+## 运动与分析
+
+- **me** — 运动搜索算法。0=dia, 1=hex, 2=umh, 3=star。推荐 star (me=3)，综合好于 umh。**不要用 full**（x265 目前未对 full 做优化，太慢）。
+- **subme** — 亚像素优化级别。最低建议 3（preset=slow 时自动设置）。推荐 5。
+- **merange** — 搜索范围。官方建议 57，实测 1080p 设为 38 已绰绰有余。
+
+## 心理视觉
+
+- **psy-rd** — 心理视觉优化强度。调节锐利度和细节保留。默认 2.0 是不错的数值。中低码率可降至 1.5 左右。
+- **psy-rdoq** — 类似 x264 的 psy-trellis，保留细节和噪点。推荐 1.0。
+- **rdoq-level** — RDOQ 级别。0=关闭，1=部分，2=完整。slow 及以上 preset 自动开启为 2。推荐 2。
+- **rd** — Rate Distortion Optimization 模式。3 是很平衡的选择。5 是实际最高选择（与 6 相同）。
+
+## 色度
+
+- **cbqpoffs** — Cb 色度 QP 偏移。x265 没有 x264 的自动 Chroma QP 调整机制，导致经常出现 chroma 欠码。推荐手动设为 -2。
+- **crqpoffs** — Cr 色度 QP 偏移。同上，推荐 -2。
+
+## 分块优化
+
+- **limit-tu** — 限制 TU 递归深度。如果开启了 rect，建议 limit-tu=4 来限制 x265 的无效尝试。
+- **no-rect** / **no-amp** — 关闭非正方形分块。1080p 及以下分辨率，rect 基本没作用，amp 几乎完全没作用，但都是速度黑洞。推荐至少关闭 amp（`--no-amp`）。
+
+## 其他
+
+- **deblock** — 去色块滤波器 (alpha:beta)。高画质编码推荐 -1:-1。
+- **keyint** — 最大 GOP 区间。HEVC 解码压力比 AVC 大，不宜设太长。推荐 360。
+- **min-keyint** — 最小 GOP 区间。推荐 1。
+- **pbratio** — P/B 帧质量比。动漫编码 B 帧数量庞大且 P/B 分工不明显，建议降低至 1.2。
+- **no-open-gop** — 关闭 Open GOP。推荐开启以屏蔽部分设备的兼容性问题。
+- **no-strong-intra-smoothing** — 关闭强帧内平滑。高画质编码推荐。
+- **scenecut** — 场景切换检测灵敏度。默认 40。
