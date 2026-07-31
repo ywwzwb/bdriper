@@ -5,18 +5,51 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/zwb/bdriper/internal/api"
+	"github.com/zwb/bdriper/internal/config"
+	"github.com/zwb/bdriper/internal/db"
+	"github.com/zwb/bdriper/internal/log"
+	"github.com/zwb/bdriper/internal/preview"
+	"github.com/zwb/bdriper/internal/task"
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	dataDir := os.Getenv("BDRI_PER_DATA_DIR")
+	if dataDir == "" {
+		home, _ := os.UserHomeDir()
+		dataDir = filepath.Join(home, ".bdriper")
+	}
+
+	database, err := db.Open(dataDir)
+	if err != nil {
+		panic("failed to open database: " + err.Error())
+	}
+
+	bw := log.NewBroadcastHandler(os.Stdout, slog.LevelInfo)
+	logger := slog.New(bw)
+
+	runner := task.NewRunner(database, logger, 2)
+
+	presetsDir := os.Getenv("BDRI_PER_PRESETS_DIR")
+	if presetsDir == "" {
+		presetsDir = "presets"
+	}
+	config.LoadPresets(database, presetsDir)
+
+	preview.StartCleanup(database, 30*time.Minute)
 
 	srv := &api.Server{
-		Logger:  logger,
-		TaskHub: api.NewHub(),
-		LogHub:  api.NewHub(),
+		DB:         database,
+		Logger:     logger,
+		LogHandler: bw,
+		TaskHub:    api.NewHub(),
+		LogHub:     api.NewHub(),
+		Runner:     runner,
+		DataDir:    dataDir,
 	}
 
 	mux := http.NewServeMux()
