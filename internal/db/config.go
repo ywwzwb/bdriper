@@ -31,7 +31,7 @@ func ListConfigs(db *sql.DB) ([]TranscodeConfig, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var cfgs []TranscodeConfig
+	cfgs := make([]TranscodeConfig, 0)
 	for rows.Next() {
 		var c TranscodeConfig
 		rows.Scan(&c.ID, &c.Name, &c.EncoderType, &c.VideoEncoder, &c.VideoParams, &c.AudioTracks, &c.SubtitleTracks, &c.ChaptersEnabled, &c.OutputMuxer, &c.IsBuiltin, &c.CreatedAt)

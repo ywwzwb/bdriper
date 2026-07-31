@@ -57,6 +57,11 @@ func main() {
 
 	spaFS := http.Dir(getEnv("WEB_DIST", "web/dist"))
 
+	helpDir := os.Getenv("BDRI_PER_HELP_DIR")
+	if helpDir == "" {
+		helpDir = getEnv("HELP_DIR", filepath.Join(presetsDir, "..", "docs", "help"))
+	}
+
 	srv := &api.Server{
 		DB:         database,
 		Logger:     logger,
@@ -65,6 +70,8 @@ func main() {
 		LogHub:     api.NewHub(),
 		Runner:     runner,
 		DataDir:    dataDir,
+		HelpDir:    helpDir,
+		PresetsDir: presetsDir,
 		SPAFS:      spaFS,
 	}
 

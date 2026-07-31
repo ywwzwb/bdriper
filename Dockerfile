@@ -27,11 +27,13 @@ FROM base AS runtime
 COPY --from=go-builder /bdriper /usr/local/bin/bdriper
 COPY --from=web-builder /src/dist /app/web/dist
 COPY presets/ /app/presets/
+COPY docs/help/ /app/docs/help/
 EXPOSE 8080
 ENV DATA_DIR=/data
 ENV INPUT_DIR=/input
 ENV OUTPUT_DIR=/output
 ENV PRESETS_DIR=/app/presets
+ENV HELP_DIR=/app/docs/help
 ENV WEB_DIST=/app/web/dist
 RUN mkdir -p /tmp/bdriper
 ENTRYPOINT ["bdriper"]

@@ -18,6 +18,8 @@ type Server struct {
 	LogHub     *Hub
 	Runner     *task.Runner
 	DataDir    string
+	HelpDir    string
+	PresetsDir string
 	SPAFS      http.FileSystem
 }
 
@@ -61,6 +63,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /ws/events", s.TaskHub.HandleWS)
 	mux.HandleFunc("GET /ws/logs", s.handleWSLogs)
+
+	mux.HandleFunc("GET /api/help", s.handleHelpDoc)
 
 	if s.SPAFS != nil {
 		mux.Handle("/", http.FileServer(s.SPAFS))

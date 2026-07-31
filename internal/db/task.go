@@ -54,7 +54,7 @@ func ListTasks(db *sql.DB, status string) ([]Task, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var tasks []Task
+	tasks := make([]Task, 0)
 	for rows.Next() {
 		var t Task
 		rows.Scan(&t.ID, &t.Name, &t.Status, &t.SourcePath, &t.OutputPath, &t.Progress, &t.EstimatedETA, &t.PID, &t.ConfigID, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)

@@ -54,7 +54,7 @@ func ListExpiredPreviews(db *sql.DB) ([]PreviewJob, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var jobs []PreviewJob
+	jobs := make([]PreviewJob, 0)
 	for rows.Next() {
 		var j PreviewJob
 		rows.Scan(&j.ID, &j.OutputFile)
