@@ -6,16 +6,21 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/zwb/bdriper/internal/api"
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
+	srv := &api.Server{
+		Logger:  logger,
+		TaskHub: api.NewHub(),
+		LogHub:  api.NewHub(),
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
-	})
+	srv.RegisterRoutes(mux)
 
 	server := &http.Server{
 		Addr:    ":8080",

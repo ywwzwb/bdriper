@@ -2,7 +2,10 @@ module github.com/zwb/bdriper
 
 go 1.26.5
 
-require modernc.org/sqlite v1.55.0
+require (
+	github.com/gorilla/websocket v1.5.3
+	modernc.org/sqlite v1.55.0
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
