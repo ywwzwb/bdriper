@@ -1,37 +1,23 @@
 <template>
-  <nav class="flex items-center justify-between px-6 py-3 bg-card/80 backdrop-blur border-b border-border/50">
-    <RouterLink to="/" class="flex items-center gap-2.5 group">
-      <div class="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-        <svg class="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polygon points="12,2 22,8.5 22,15.5 12,22 2,15.5 2,8.5"/></svg>
+  <nav style="position:sticky;top:0;z-index:50;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);background:rgba(2,2,3,0.6);border-bottom:1px solid rgba(255,255,255,0.06);">
+    <div style="max-width:1200px;margin:0 auto;padding:0 24px;display:flex;align-items:center;height:56px;">
+      <router-link to="/" style="display:flex;align-items:center;gap:8px;text-decoration:none;margin-right:40px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#5E6AD2;box-shadow:0 0 12px rgba(94,106,210,0.6);" />
+        <span style="font-weight:700;font-size:16px;color:#EDEDEF;letter-spacing:-0.5px;">BDRiper</span>
+      </router-link>
+      <div style="display:flex;gap:4px;">
+        <router-link v-for="tab in tabs" :key="tab.path" :to="tab.path" class="pill" :class="{ active: $route.path === tab.path }">
+          {{ tab.name }}
+        </router-link>
       </div>
-      <span class="text-fg font-bold text-lg tracking-tight">BDRiper</span>
-    </RouterLink>
-
-    <div class="flex gap-1 bg-muted/50 rounded-xl p-1">
-      <RouterLink
-        v-for="link in links"
-        :key="link.to"
-        :to="link.to"
-        class="relative px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
-        :class="route.path === link.to ? 'text-fg bg-card shadow-sm' : 'text-muted hover:text-fg'"
-        active-class=""
-        :exact="link.to === '/'"
-      >
-        {{ link.label }}
-      </RouterLink>
     </div>
   </nav>
 </template>
-
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
-
-const route = useRoute()
-
-const links = [
-  { to: '/', label: '概览' },
-  { to: '/tasks', label: '任务管理' },
-  { to: '/logs', label: '日志' },
-  { to: '/settings', label: '设置' },
+const tabs = [
+  { name: '概览', path: '/' },
+  { name: '任务管理', path: '/tasks' },
+  { name: '日志', path: '/logs' },
+  { name: '设置', path: '/settings' },
 ]
 </script>

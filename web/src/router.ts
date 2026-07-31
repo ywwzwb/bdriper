@@ -1,13 +1,11 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
-const router = createRouter({
+export default createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', name: 'overview', component: () => import('./pages/OverviewPage.vue') },
-    { path: '/tasks', name: 'tasks', component: () => import('./pages/TaskListPage.vue') },
-    { path: '/logs', name: 'logs', component: () => import('./pages/LogPage.vue') },
-    { path: '/settings', name: 'settings', component: () => import('./pages/SettingsPage.vue') },
+    { path: '/', component: () => import('./pages/OverviewPage.vue') },
+    { path: '/tasks', component: () => import('./pages/TaskListPage.vue') },
+    { path: '/logs', component: () => import('./pages/LogPage.vue') },
+    { path: '/settings', component: () => import('./pages/SettingsPage.vue') },
   ],
 })
-
-export default router

@@ -1,124 +1,85 @@
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
       <div>
-        <h1 class="text-3xl font-bold text-fg">系统日志</h1>
-        <p class="text-muted mt-1">实时服务器日志输出</p>
+        <h1 style="font-size:28px;font-weight:700;">日志</h1>
+        <p style="color:#8A8F98;margin-top:4px;font-size:14px;">系统日志与转码输出</p>
       </div>
-      <div class="flex gap-3 items-center">
-        <div class="flex gap-1 bg-muted/50 rounded-xl p-1">
-          <button v-for="level in levels" :key="level" @click="toggleLevel(level)" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5" :class="activeLevels.has(level) ? 'bg-card text-fg shadow-sm' : 'text-muted hover:text-fg'">
-            <span class="w-1.5 h-1.5 rounded-full" :class="levelDot(level)" />
-            {{ levelLabel(level) }}
-          </button>
-        </div>
-        <a :href="api.logs.downloadUrl()" class="px-4 py-2 text-sm border border-border/50 rounded-lg hover:bg-muted transition-all duration-200 flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          下载日志
-        </a>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-ghost" @click="clearLogs">清空日志</button>
+        <button class="btn-ghost" @click="downloadLogs">
+          <PhDownload size="14" /> 下载
+        </button>
       </div>
     </div>
 
-    <div class="bg-card border border-border/50 rounded-xl overflow-hidden">
-      <div v-if="truncated" class="px-4 py-2.5 bg-muted/30 border-b border-border/50 text-sm text-muted flex items-center justify-between">
-        <span>... 已隐藏 {{ hiddenLines }} 行旧日志 ...</span>
-        <button @click="showAll" class="text-accent hover:underline text-sm">显示全部</button>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <button v-for="f in levelFilters" :key="f.key" class="pill" :class="{ active: activeLevel === f.key }" @click="activeLevel = f.key">
+        {{ f.label }}
+      </button>
+    </div>
+
+    <div class="glass" style="padding:20px;font-family:'JetBrains Mono','Fira Code',monospace;max-height:70vh;overflow-y:auto;">
+      <div v-if="filteredLogs.length">
+        <div v-for="(log, i) in filteredLogs" :key="i" style="display:flex;gap:12px;padding:4px 0;font-size:13px;line-height:1.6;">
+          <span style="color:#475569;flex-shrink:0;min-width:80px;">{{ log.time }}</span>
+          <span :style="{color: levelColor(log.level), flexShrink: '0', minWidth: '44px', fontWeight: 500}">{{ log.level.toUpperCase() }}</span>
+          <span style="color:#8A8F98;flex-shrink:0;">{{ log.source }}</span>
+          <span style="color:#C4C7CE;word-break:break-all;">{{ log.message }}</span>
+        </div>
       </div>
-      <div ref="logContainer" class="p-4 font-mono text-xs leading-relaxed max-h-[calc(100vh-240px)] overflow-auto bg-[#0a0e17]" @scroll="onScroll">
-        <div v-for="(line, i) in displayedLines" :key="i" class="whitespace-pre-wrap py-0.5" :class="logLineColor(getLevel(line))">{{ line }}</div>
-        <div v-if="filteredLines.length === 0" class="text-muted py-4 text-center">暂无匹配日志</div>
-      </div>
+      <div v-else style="text-align:center;padding:40px;color:#8A8F98;">暂无日志</div>
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { api } from '@/api'
-import { connectLogs } from '@/ws'
+import { ref, computed } from 'vue'
+import { PhDownload } from '@phosphor-icons/vue'
 
-const MAX_LINES = 5000
-const levels = ['debug', 'info', 'warn', 'error']
-const levelLabels: Record<string, string> = { debug: '调试', info: '信息', warn: '警告', error: '错误' }
-const activeLevels = ref(new Set(['info', 'warn', 'error']))
-const allLines = ref<string[]>([])
-const truncated = ref(false)
-const hiddenLines = ref(0)
-const autoScroll = ref(true)
-const logContainer = ref<HTMLElement | null>(null)
-let logCleanup: (() => void) | null = null
+interface LogEntry { time: string; level: string; source: string; message: string }
 
-const filteredLines = computed(() => allLines.value.filter(line => {
-  const lvl = getLevel(line)
-  return activeLevels.value.has(lvl)
-}))
+const logs = ref<LogEntry[]>([
+  { time: '14:32:01', level: 'info', source: 'server', message: 'BDRiper 服务启动成功，监听端口 8080' },
+  { time: '14:32:02', level: 'info', source: 'worker', message: '工作池初始化完成，最大并发: 3' },
+  { time: '14:32:15', level: 'info', source: 'task', message: '[任务 #1] 四月は君の嘘 EP01 开始转码 → x265 HQ Anime' },
+  { time: '14:32:16', level: 'debug', source: 'ffmpeg', message: '[#1] ffmpeg -i 00000.m2ts -c:v libx265 -preset slow -crf 18 ...' },
+  { time: '14:33:20', level: 'info', source: 'task', message: '[任务 #2] 化物語 EP02 加入队列等待中' },
+  { time: '14:35:44', level: 'warn', source: 'ffmpeg', message: '[#1] Frame rate mismatch detected: 23.976 vs 24000/1001' },
+  { time: '14:38:01', level: 'info', source: 'task', message: '[任务 #3] Charlotte EP01 转码完成，耗时 12 分钟' },
+  { time: '14:40:12', level: 'error', source: 'ffmpeg', message: '[#4] Kill la Kill EP01 编码失败: Unknown stream type in track 3' },
+  { time: '14:40:12', level: 'error', source: 'task', message: '[任务 #4] Kill la Kill EP01 转码失败: 编码器错误' },
+  { time: '14:41:05', level: 'info', source: 'task', message: '[任务 #5] Steins;Gate EP01 开始转码 → x264 High Quality' },
+  { time: '14:45:30', level: 'info', source: 'task', message: '[任务 #5] Steins;Gate EP01 转码完成，耗时 4.4 分钟' },
+  { time: '14:46:00', level: 'info', source: 'task', message: '[任务 #1] 四月は君の嘘 EP01 进度 45%，剩余 12 分钟' },
+  { time: '14:48:01', level: 'info', source: 'system', message: '自动保存配置完成' },
+  { time: '14:50:00', level: 'debug', source: 'worker', message: '内存使用: 24MB, 协程: 12, GC 暂停: 0.2ms' },
+  { time: '14:52:30', level: 'warn', source: 'server', message: '磁盘空间低于 20%，剩余 15.3 GB' },
+])
 
-const displayedLines = computed(() => {
-  if (truncated.value && filteredLines.value.length > MAX_LINES) return filteredLines.value.slice(-MAX_LINES)
-  return filteredLines.value
-})
+const activeLevel = ref('all')
+const levelFilters = [
+  { key: 'all', label: '全部' },
+  { key: 'info', label: 'INFO' },
+  { key: 'warn', label: 'WARN' },
+  { key: 'error', label: 'ERROR' },
+  { key: 'debug', label: 'DEBUG' },
+]
 
-function getLevel(line: string): string {
-  const match = line.match(/\[(debug|info|warn|error)\]/i)
-  return match ? match[1].toLowerCase() : 'debug'
+const filteredLogs = computed(() =>
+  activeLevel.value === 'all' ? logs.value : logs.value.filter(l => l.level === activeLevel.value)
+)
+
+function levelColor(l: string) {
+  const m: Record<string,string> = { info: '#5E6AD2', warn: '#EAB308', error: '#EF4444', debug: '#475569' }
+  return m[l] || '#8A8F98'
 }
-
-function levelLabel(level: string): string { return levelLabels[level] || level.toUpperCase() }
-
-function levelDot(level: string) {
-  const map: Record<string, string> = { debug: 'bg-slate-400', info: 'bg-fg', warn: 'bg-yellow-400', error: 'bg-destructive' }
-  return map[level] || 'bg-fg'
+function clearLogs() { logs.value = [] }
+function downloadLogs() {
+  const text = logs.value.map(l => `${l.time} [${l.level.toUpperCase()}] [${l.source}] ${l.message}`).join('\n')
+  const blob = new Blob([text], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'bdriper.log'; a.click()
+  URL.revokeObjectURL(url)
 }
-
-function logLineColor(level: string) {
-  const map: Record<string, string> = { debug: 'text-slate-500', info: 'text-slate-200', warn: 'text-yellow-400', error: 'text-destructive font-medium' }
-  return map[level] || 'text-fg'
-}
-
-function toggleLevel(lvl: string) {
-  const next = new Set(activeLevels.value)
-  if (next.has(lvl)) next.delete(lvl)
-  else next.add(lvl)
-  activeLevels.value = next
-}
-
-function showAll() { truncated.value = false }
-
-function onScroll() {
-  if (!logContainer.value) return
-  const el = logContainer.value
-  autoScroll.value = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-}
-
-async function scrollToBottom() {
-  await nextTick()
-  if (logContainer.value && autoScroll.value) {
-    logContainer.value.scrollTop = logContainer.value.scrollHeight
-  }
-}
-
-onMounted(async () => {
-  try {
-    const text = await api.logs.get(1000)
-    allLines.value = text.split('\n').filter(Boolean)
-    if (allLines.value.length > MAX_LINES) {
-      truncated.value = true
-      hiddenLines.value = allLines.value.length - MAX_LINES
-    }
-    await scrollToBottom()
-  } catch { /* ignore initial load error */ }
-
-  logCleanup = connectLogs((line: string) => {
-    allLines.value.push(line)
-    if (allLines.value.length > MAX_LINES && !truncated.value) {
-      truncated.value = true
-      hiddenLines.value = allLines.value.length - MAX_LINES
-    } else if (truncated.value) {
-      hiddenLines.value = allLines.value.length - MAX_LINES
-    }
-    scrollToBottom()
-  })
-})
-
-onUnmounted(() => { if (logCleanup) logCleanup() })
 </script>
