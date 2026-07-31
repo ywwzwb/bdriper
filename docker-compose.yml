@@ -1,0 +1,32 @@
+services:
+  bdriper:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - /mnt/bdmv:/input:ro
+      - /mnt/output:/output
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      - MAX_CONCURRENT=2
+    restart: unless-stopped
+
+  # GPU variant (uncomment if NVIDIA GPU available):
+  # bdriper-gpu:
+  #   build: .
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - ./data:/data
+  #     - /mnt/bdmv:/input:ro
+  #     - /mnt/output:/output
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   restart: unless-stopped

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,8 +21,10 @@ import (
 func main() {
 	dataDir := os.Getenv("BDRI_PER_DATA_DIR")
 	if dataDir == "" {
-		home, _ := os.UserHomeDir()
-		dataDir = filepath.Join(home, ".bdriper")
+		dataDir = getEnv("DATA_DIR", "")
+	}
+	if dataDir == "" {
+		dataDir = filepath.Join(mustUserHomeDir(), ".bdriper")
 	}
 
 	database, err := db.Open(dataDir)
@@ -32,15 +35,18 @@ func main() {
 	bw := log.NewBroadcastHandler(os.Stdout, slog.LevelInfo)
 	logger := slog.New(bw)
 
-	runner := task.NewRunner(database, logger, 2)
+	maxConcurrent := getEnvInt("MAX_CONCURRENT", 2)
+	runner := task.NewRunner(database, logger, maxConcurrent)
 
 	presetsDir := os.Getenv("BDRI_PER_PRESETS_DIR")
 	if presetsDir == "" {
-		presetsDir = "presets"
+		presetsDir = getEnv("PRESETS_DIR", "presets")
 	}
 	config.LoadPresets(database, presetsDir)
 
 	preview.StartCleanup(database, 30*time.Minute)
+
+	spaFS := http.Dir(getEnv("WEB_DIST", "web/dist"))
 
 	srv := &api.Server{
 		DB:         database,
@@ -50,6 +56,7 @@ func main() {
 		LogHub:     api.NewHub(),
 		Runner:     runner,
 		DataDir:    dataDir,
+		SPAFS:      spaFS,
 	}
 
 	mux := http.NewServeMux()
@@ -72,6 +79,30 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 	logger.Info("shutting down")
+}
+
+func getEnv(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func getEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
+func mustUserHomeDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "/tmp"
+	}
+	return home
 }
 
 func withMiddleware(next http.Handler) http.Handler {
