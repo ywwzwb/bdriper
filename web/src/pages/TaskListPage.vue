@@ -27,7 +27,7 @@
               <span style="font-weight:600;font-size:15px;">{{ task.name }}</span>
               <span :class="'badge badge-' + task.status">{{ statusLabel(task.status) }}</span>
             </div>
-            <div style="font-size:13px;color:#8A8F98;">{{ task.file }}</div>
+            <div style="font-size:13px;color:#8A8F98;">{{ task.source_path || task.file }}</div>
             <div v-if="task.status === 'running'" class="progress-track" style="margin-top:8px;">
               <div class="progress-fill" :style="{width: task.progress + '%'}" />
             </div>
@@ -50,10 +50,10 @@
 
         <div v-if="task.expanded" style="border-top:1px solid rgba(255,255,255,0.06);padding:16px 20px 16px 39px;">
           <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 20px;font-size:13px;">
-            <span style="color:#8A8F98;">源文件</span><span style="color:#EDEDEF;">{{ task.sourcePath }}</span>
-            <span style="color:#8A8F98;">目标路径</span><span style="color:#EDEDEF;">{{ task.outputPath }}</span>
+            <span style="color:#8A8F98;">源文件</span><span style="color:#EDEDEF;">{{ task.source_path || task.sourcePath }}</span>
+            <span style="color:#8A8F98;">目标路径</span><span style="color:#EDEDEF;">{{ task.output_path || task.outputPath }}</span>
             <span style="color:#8A8F98;">配置</span>
-            <span style="color:#5E6AD2;cursor:pointer;text-decoration:underline;" @click.stop="viewConfig(task.config)">{{ task.config }}</span>
+            <span style="color:#5E6AD2;cursor:pointer;text-decoration:underline;" @click.stop="viewConfig(task.config_name || task.config)">{{ task.config_name || task.config }}</span>
             <span style="color:#8A8F98;">PID</span><span style="color:#EDEDEF;">{{ task.pid || '—' }}</span>
           </div>
         </div>
@@ -68,7 +68,6 @@
       <div style="font-size:13px;color:#8A8F98;margin-top:4px;">点击「新建任务」开始转码</div>
     </div>
 
-    <!-- Floating batch action bar -->
     <div v-if="selectedIds.length" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:40;padding:12px 24px;display:flex;align-items:center;gap:12px;" class="glass">
       <span style="font-size:13px;color:#8A8F98;">已选 {{ selectedIds.length }} 项</span>
       <button class="btn-primary" @click="batchDelete">批量删除</button>
@@ -76,7 +75,6 @@
       <button class="btn-ghost" @click="selectedIds = []">取消选择</button>
     </div>
 
-    <!-- Config detail modal (Issue 8) -->
     <Teleport to="body">
       <div v-if="configDetail" class="cfg-modal-overlay" @click.self="configDetail = null">
         <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:60;width:600px;max-height:80vh;overflow-y:auto;">
@@ -120,79 +118,19 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { PhFolder } from '@phosphor-icons/vue'
 import WizardModal from '../wizard/WizardModal.vue'
+import { api } from '@/api'
+import { on as wsOn } from '@/ws'
 
-interface Task {
-  id: number; name: string; status: string; file: string; progress: number
-  eta: string; size: string; sourcePath: string; outputPath: string; config: string; pid: number | null
-  error_msg?: string; expanded?: boolean
-}
-
-const tasks = ref<Task[]>([
-  {
-    id: 1, name: '四月は君の嘘 EP01', status: 'running', file: '00000.m2ts',
-    progress: 45, eta: '12分钟', size: '', sourcePath: '/input/BDROM/BDMV/STREAM/00000.m2ts',
-    outputPath: '/output/Shigatsu_EP01.mkv', config: 'x265 HQ Anime', pid: 12345,
-  },
-  {
-    id: 2, name: '化物語 EP02', status: 'pending', file: '00001.m2ts',
-    progress: 0, eta: '', size: '', sourcePath: '/input/BDROM/BDMV/STREAM/00001.m2ts',
-    outputPath: '/output/Bakemonogatari_EP02.mkv', config: 'x264 高画质 (mbtree on)', pid: null,
-  },
-  {
-    id: 3, name: 'Charlotte EP01', status: 'completed', file: '00000.m2ts',
-    progress: 100, eta: '', size: '2.3 GB', sourcePath: '/input/BDROM/BDMV/STREAM/00000.m2ts',
-    outputPath: '/output/Charlotte_EP01.mkv', config: 'x265 HQ Anime', pid: null,
-  },
-  {
-    id: 4, name: 'Kill la Kill EP01', status: 'failed', file: '00002.m2ts',
-    progress: 23, eta: '', size: '', sourcePath: '/input/BDROM/BDMV/STREAM/00002.m2ts',
-    outputPath: '/output/KLK_EP01.mkv', config: 'NVENC 快速编码', pid: null, error_msg: '编码器错误: 未知流类型',
-  },
-  {
-    id: 5, name: 'Steins;Gate EP01', status: 'completed', file: '00003.m2ts',
-    progress: 100, eta: '', size: '1.8 GB', sourcePath: '/input/BDROM/BDMV/STREAM/00003.m2ts',
-    outputPath: '/output/SG_EP01.mkv', config: 'x264 高画质 (mbtree off)', pid: null,
-  },
-  {
-    id: 6, name: '魔法少女小圆 EP01', status: 'paused', file: '00004.m2ts',
-    progress: 68, eta: '', size: '', sourcePath: '/input/BDROM/BDMV/STREAM/00004.m2ts',
-    outputPath: '/output/Madoka_EP01.mkv', config: 'x265 均衡', pid: null,
-  },
-])
-
+const tasks = ref<any[]>([])
 const showWizard = ref(false)
 const selectedIds = ref<number[]>([])
-
-const configsMap: Record<string, any> = {
-  'x265 HQ Anime': { id: 0, name: 'x265 HQ Anime', encoder: 'x265', mode: 'cpu', isPreset: true,
-    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
-    params: { crf: 15, preset: 'slower', deblock: '-1:-1', ctu: 32, 'qg-size': 8, me: 'star', subme: 5, merange: 38, bframes: 6, ref: 4, qcomp: 0.65, 'aq-mode': 1, 'aq-strength': 0.8, 'no-sao': true, 'psy-rd': 2.0, 'psy-rdoq': 1.0, 'rdoq-level': 2, rd: 5, pbratio: 1.2, cbqpoffs: -2, crqpoffs: -2, keyint: 360 } },
-  'x264 高画质 (mbtree on)': { id: 1, name: 'x264 高画质 (mbtree on)', encoder: 'x264', mode: 'cpu', isPreset: true,
-    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
-    params: { crf: 18, preset: 'veryslow', tune: 'animation', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', mbtree: 1, 'rc-lookahead': 250, ref: 16, bframes: 16, subme: 11, merange: 48 } },
-  'x265 均衡': { id: 2, name: 'x265 均衡', encoder: 'x265', mode: 'cpu', isPreset: true,
-    audio: { codec: 'AAC', bitrate: '192kbps' },
-    params: { crf: 20, preset: 'medium', 'aq-mode': 3, 'aq-strength': 0.7, deblock: '0:0', bframes: 8, 'rc-lookahead': 40 } },
-  'x264 高画质 (mbtree off)': { id: 3, name: 'x264 高画质 (mbtree off)', encoder: 'x264', mode: 'cpu', isPreset: true,
-    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
-    params: { crf: 16, preset: 'veryslow', tune: 'animation', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', mbtree: 0, 'rc-lookahead': 250, ref: 16, bframes: 16, subme: 11 } },
-  'NVENC 快速编码': { id: 4, name: 'NVENC 快速编码', encoder: 'h264_nvenc', mode: 'gpu', isPreset: false,
-    audio: { codec: 'OPUS', bitrate: '192kbps' },
-    params: { crf: 20, preset: 'p7', tune: 'hq', rc: 'vbr', b_ref_mode: 'middle', multipass: 'qres', 'aq-strength': 8, lookahead: 32, bframes: 4 } },
-  '我的自定义配置': { id: 5, name: '我的自定义配置', encoder: 'x265', mode: 'cpu', isPreset: false,
-    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
-    params: { crf: 17, preset: 'slow', 'aq-mode': 3, 'aq-strength': 0.9, deblock: '-1:-1', 'no-sao': true, bframes: 12 } },
-}
-
 const configDetail = ref<any>(null)
-function viewConfig(name: string) {
-  configDetail.value = configsMap[name] || null
-}
 
 const activeFilter = ref('all')
+
 const filters = computed(() => [
   { key: 'all', label: '全部', count: tasks.value.length },
   { key: 'running', label: '运行中', count: tasks.value.filter(t => t.status === 'running').length },
@@ -211,6 +149,24 @@ const canBatchPause = computed(() => {
   return selected.some(t => t.status === 'running' || t.status === 'pending')
 })
 
+onMounted(() => {
+  fetchTasks()
+  wsOn('progress', (data: any) => {
+    const task = tasks.value.find(t => t.id === data.task_id)
+    if (task) {
+      task.progress = data.progress * 100
+    }
+  })
+})
+
+watch(activeFilter, () => fetchTasks())
+
+async function fetchTasks() {
+  try {
+    tasks.value = await api.tasks.list(activeFilter.value)
+  } catch {}
+}
+
 function statusColor(s: string) {
   const m: Record<string,string> = { running: '#5E6AD2', completed: '#22C55E', failed: '#EF4444', pending: '#EAB308', paused: '#94A3B8' }
   return m[s] || '#475569'
@@ -219,23 +175,35 @@ function statusLabel(s: string) {
   const m: Record<string,string> = { running: '运行中', completed: '已完成', failed: '失败', pending: '等待', paused: '已暂停' }
   return m[s] || s
 }
-function pauseTask(t: Task) { t.status = 'paused' }
-function cancelTask(t: Task) { t.status = 'failed'; t.error_msg = '用户取消' }
-function retryTask(t: Task) { t.status = 'pending'; t.progress = 0; t.error_msg = '' }
-function deleteTask(t: Task) { tasks.value = tasks.value.filter(x => x.id !== t.id) }
-function deleteCompleted() { tasks.value = tasks.value.filter(t => t.status !== 'completed') }
 
-function batchDelete() {
-  tasks.value = tasks.value.filter(t => !selectedIds.value.includes(t.id))
-  selectedIds.value = []
+async function pauseTask(task: any) {
+  try { await api.tasks.update(task.id, { status: 'paused' }); fetchTasks() } catch {}
 }
-function batchPause() {
-  tasks.value.forEach(t => {
-    if (selectedIds.value.includes(t.id) && (t.status === 'running' || t.status === 'pending')) {
-      t.status = 'paused'
-    }
-  })
-  selectedIds.value = []
+async function cancelTask(task: any) {
+  try { await api.tasks.update(task.id, { status: 'cancelled' }); fetchTasks() } catch {}
+}
+async function retryTask(task: any) {
+  try { await api.tasks.retry(task.id); fetchTasks() } catch {}
+}
+async function deleteTask(task: any) {
+  try { await api.tasks.delete(task.id); fetchTasks() } catch {}
+}
+async function deleteCompleted() {
+  try { await api.tasks.deleteCompleted(); fetchTasks() } catch {}
+}
+
+async function batchDelete() {
+  try { await api.tasks.batch(selectedIds.value, 'delete'); selectedIds.value = []; fetchTasks() } catch {}
+}
+async function batchPause() {
+  try { await api.tasks.batch(selectedIds.value, 'pause'); selectedIds.value = []; fetchTasks() } catch {}
+}
+
+async function viewConfig(name: string) {
+  try {
+    const configs = await api.configs.list()
+    configDetail.value = configs.find((c: any) => c.name === name) || null
+  } catch {}
 }
 </script>
 <style scoped>

@@ -7,7 +7,6 @@
           <button class="btn-ghost" style="padding:6px 12px;font-size:12px;" @click="cancel">取消</button>
         </div>
 
-        <!-- Mode selector -->
         <div v-if="configStep === 0" style="text-align:center;padding:20px 0;">
           <div style="font-size:15px;font-weight:600;margin-bottom:20px;">选择配置模式</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
@@ -24,7 +23,6 @@
           </div>
         </div>
 
-        <!-- Simple mode form -->
         <div v-if="configStep === 1 && configMode === 'simple'" style="display:flex;flex-direction:column;gap:16px;">
           <div style="font-weight:600;">简易配置</div>
           <div>
@@ -87,7 +85,6 @@
           </div>
         </div>
 
-        <!-- Professional mode — Step 1: Video params -->
         <div v-if="configStep === 1 && configMode === 'pro'">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
             <h3 style="font-weight:600;">专业配置 — 视频参数</h3>
@@ -142,7 +139,6 @@
           <button class="btn-primary" style="margin-top:12px;" @click="configStep = 2">下一步: 音频配置</button>
         </div>
 
-        <!-- Professional mode — Step 2: Audio + naming -->
         <div v-if="configStep === 2 && configMode === 'pro'" style="display:flex;flex-direction:column;gap:16px;">
           <div style="font-weight:600;">专业配置 — 音频参数</div>
           <div>
@@ -178,7 +174,6 @@
       </div>
     </div>
 
-    <!-- Help modal -->
     <div v-if="showHelp" style="position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="showHelp = false">
       <div class="glass" style="width:700px;max-height:80vh;display:flex;flex-direction:column;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
@@ -270,9 +265,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
+import { api } from '@/api'
 
 const props = defineProps<{ visible: boolean; editConfig?: any }>()
-const emit = defineEmits<{ close: []; saved: [config: any] }>()
+const emit = defineEmits<{ close: []; saved: [config: any]; error?: [msg: string] }>()
 
 const configStep = ref(0)
 const configMode = ref<'simple' | 'pro'>('simple')
@@ -391,7 +387,7 @@ watch(() => props.editConfig, (cfg) => {
   if (cfg) {
     configMode.value = 'pro'
     newConfig.name = cfg.name || ''
-    newConfig.encoder = cfg.encoder || 'x265'
+    newConfig.encoder = cfg.encoder || cfg.video_encoder || 'x265'
     newConfig.audioEncoder = (cfg.audio?.codec || 'flac').toLowerCase()
     newConfig.audioBitrate = cfg.audio?.bitrate ? String(cfg.audio.bitrate).replace('kbps', '') : '192'
     newConfig.params = { ...defaultParams, ...cfg.params }
@@ -399,7 +395,7 @@ watch(() => props.editConfig, (cfg) => {
   }
 }, { immediate: true })
 
-function saveNewConfig() {
+async function saveNewConfig() {
   const name = newConfig.name || '未命名配置'
   const mode = newConfig.encoder.includes('nvenc') || newConfig.encoder.includes('qsv') || newConfig.encoder.includes('amf') ? 'gpu' : 'cpu'
   let params: Record<string, any>
@@ -416,12 +412,32 @@ function saveNewConfig() {
   if (audioEncoder !== 'flac' && audioEncoder !== 'copy') {
     audio.bitrate = audioBitrate + 'kbps'
   }
-  const result: any = { name, encoder: newConfig.encoder, mode, isPreset: false, params, audio }
-  if (props.editConfig) {
-    result.id = props.editConfig.id
+
+  try {
+    const payload = {
+      name,
+      encoder_type: mode === 'gpu' ? 'gpu' : 'cpu',
+      video_encoder: newConfig.encoder,
+      video_params: JSON.stringify(params),
+      audio_tracks: JSON.stringify(audio),
+      subtitle_tracks: '[]',
+      chapters_enabled: true,
+      output_muxer: 'mkvmerge',
+    }
+    if (props.editConfig) {
+      await api.configs.update(props.editConfig.id, payload)
+    } else {
+      await api.configs.create(payload)
+    }
+    const result: any = { name, encoder: newConfig.encoder, mode, isPreset: false, params, audio }
+    if (props.editConfig) {
+      result.id = props.editConfig.id
+    }
+    emit('saved', result)
+    resetForm()
+  } catch (e: any) {
+    emit('error', e.message)
   }
-  emit('saved', result)
-  resetForm()
 }
 </script>
 

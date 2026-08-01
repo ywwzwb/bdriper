@@ -7,7 +7,6 @@
           <button class="btn-ghost" style="padding:6px 12px;font-size:12px;" @click="$emit('close')">取消</button>
         </div>
 
-        <!-- Completion state -->
         <div v-if="wizardComplete" style="text-align:center;padding:60px 20px;">
           <div style="font-size:48px;margin-bottom:16px;">✓</div>
           <div style="font-size:20px;font-weight:600;margin-bottom:8px;">任务创建成功</div>
@@ -16,7 +15,6 @@
         </div>
 
         <template v-if="!wizardComplete">
-          <!-- Steps indicator -->
           <div style="display:flex;gap:8px;margin-bottom:28px;">
             <div v-for="(s, i) in steps" :key="i"
               style="flex:1;text-align:center;cursor:pointer;"
@@ -30,7 +28,8 @@
             </div>
           </div>
 
-          <!-- Step 1: 源文件 -->
+          <div v-if="error" style="color:#EF4444;font-size:13px;margin-bottom:16px;padding:8px 12px;border-radius:8px;background:rgba(239,68,68,0.1);">{{ error }}</div>
+
           <div v-if="step === 0">
             <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">选择蓝光光盘目录</label>
             <div style="display:flex;gap:8px;">
@@ -39,24 +38,22 @@
             </div>
             <div v-if="sourcePath" style="margin-top:8px;font-size:12px;color:#22C55E;">已选择: {{ sourcePath }}</div>
             <div style="margin-top:24px;display:flex;justify-content:flex-end;">
-              <button class="btn-primary" :disabled="!sourcePath" @click="step = 1">下一步</button>
+              <button class="btn-primary" :disabled="!sourcePath" @click="parseStep2">下一步</button>
             </div>
           </div>
 
-          <!-- Step 2: 文件选择 -->
           <div v-if="step === 1">
-            <div style="font-size:13px;color:#8A8F98;margin-bottom:12px;">碟片名称: <span style="color:#EDEDEF;">{{ mockDiscName }}</span></div>
+            <div style="font-size:13px;color:#8A8F98;margin-bottom:12px;">碟片名称: <span style="color:#EDEDEF;">{{ discName }}</span></div>
             <div style="font-size:13px;color:#8A8F98;margin-bottom:4px;">选择要转码的视频文件</div>
             <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:20px;max-height:200px;overflow-y:auto;">
-              <label v-for="f in mockFiles" :key="f.id"
+              <label v-for="f in parsedFiles" :key="f.id || f.path"
                 style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.02);cursor:pointer;font-size:13px;">
-                <input type="checkbox" v-model="selectedFiles" :value="f.id" style="accent-color:#5E6AD2;width:16px;height:16px;" />
-                <span style="color:#EDEDEF;">{{ f.name }}</span>
-                <span style="color:#8A8F98;margin-left:auto;">{{ f.size }}</span>
+                <input type="checkbox" v-model="selectedFiles" :value="f.id || f.path" style="accent-color:#5E6AD2;width:16px;height:16px;" />
+                <span style="color:#EDEDEF;">{{ f.name || f.path }}</span>
+                <span style="color:#8A8F98;margin-left:auto;">{{ f.size || f.duration }}</span>
               </label>
             </div>
 
-            <!-- Audio tracks -->
             <div style="margin-bottom:20px;">
               <div style="font-size:14px;color:#8A8F98;margin-bottom:8px;">音轨 (多选)</div>
               <div v-for="track in parsedAudioTracks" :key="track.id"
@@ -69,7 +66,6 @@
               </div>
             </div>
 
-            <!-- Subtitle tracks -->
             <div style="margin-bottom:20px;">
               <div style="font-size:14px;color:#8A8F98;margin-bottom:8px;">字幕 (多选)</div>
               <div v-for="track in parsedSubtitleTracks" :key="track.id"
@@ -82,7 +78,6 @@
               </div>
             </div>
 
-            <!-- Chapter toggle -->
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;">
               <span style="font-size:14px;">章节信息</span>
               <div class="toggle-track" :class="{ on: chaptersEnabled }" @click="chaptersEnabled = !chaptersEnabled" style="width:44px;height:24px;flex-shrink:0;">
@@ -96,20 +91,19 @@
             </div>
           </div>
 
-          <!-- Step 3: 转码配置 -->
           <div v-if="step === 2">
             <div style="font-size:13px;color:#8A8F98;margin-bottom:12px;">选择编码配置</div>
             <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
               <label v-for="cfg in allConfigs" :key="cfg.id"
                 style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;background:rgba(255,255,255,0.02);cursor:pointer;border:1px solid transparent;"
-                :style="{ borderColor: selectedConfig === cfg.id ? '#5E6AD2' : 'transparent' }"
-                @click="selectedConfig = cfg.id">
-                <input type="radio" :checked="selectedConfig === cfg.id" style="accent-color:#5E6AD2;width:16px;height:16px;" />
+                :style="{ borderColor: selectedConfigId === cfg.id ? '#5E6AD2' : 'transparent' }"
+                @click="selectedConfigId = cfg.id">
+                <input type="radio" :checked="selectedConfigId === cfg.id" style="accent-color:#5E6AD2;width:16px;height:16px;" />
                 <div style="flex:1;">
                   <div style="font-size:14px;font-weight:500;">{{ cfg.name }}
                     <span v-if="cfg.isPreset" class="badge" style="background:rgba(94,106,210,0.15);color:#5E6AD2;font-size:10px;padding:2px 6px;margin-left:6px;">内置</span>
                   </div>
-                  <div style="font-size:12px;color:#8A8F98;margin-top:2px;">{{ cfg.encoder }} | {{ cfg.mode === 'gpu' ? 'GPU' : 'CPU' }}</div>
+                  <div style="font-size:12px;color:#8A8F98;margin-top:2px;">{{ cfg.encoder || cfg.video_encoder }} | {{ cfg.mode === 'gpu' ? 'GPU' : 'CPU' }}</div>
                 </div>
               </label>
               <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;background:rgba(255,255,255,0.02);cursor:pointer;border:1px dashed rgba(255,255,255,0.1);"
@@ -120,11 +114,10 @@
 
             <div style="display:flex;justify-content:space-between;">
               <button class="btn-ghost" @click="step = 1">上一步</button>
-              <button class="btn-primary" :disabled="selectedConfig === null" @click="step = 3">下一步</button>
+              <button class="btn-primary" :disabled="selectedConfigId === null" @click="step = 3">下一步</button>
             </div>
           </div>
 
-          <!-- Step 4: 目标路径 + preview button -->
           <div v-if="step === 3">
             <div style="margin-bottom:24px;">
               <div style="color:#8A8F98;font-size:14px;margin-bottom:6px;">输出目录</div>
@@ -152,21 +145,19 @@
 
             <div style="margin-top:24px;display:flex;justify-content:space-between;">
               <button class="btn-ghost" @click="step = 2">上一步</button>
-              <button class="btn-primary" @click="finish">完成</button>
+              <button class="btn-primary" @click="finishWizard">完成</button>
             </div>
           </div>
         </template>
       </div>
     </div>
 
-    <!-- File picker modal (Issue 1) -->
     <div v-if="showFilePicker" style="position:fixed;inset:0;z-index:160;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="showFilePicker = false">
       <div class="glass" style="width:520px;max-height:70vh;display:flex;flex-direction:column;">
         <div style="display:flex;align-items:center;gap:8px;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
           <span style="font-weight:600;font-size:15px;">浏览文件</span>
         </div>
 
-        <!-- Current path breadcrumb -->
         <div style="display:flex;align-items:center;gap:4px;padding:8px 20px;font-size:13px;color:#8A8F98;flex-wrap:wrap;">
           <template v-for="(seg, i) in pathSegments" :key="i">
             <span @click="navigateTo(i)" style="cursor:pointer;color:#5E6AD2;" class="hover-span">{{ seg || '/' }}</span>
@@ -174,7 +165,6 @@
           </template>
         </div>
 
-        <!-- Directory listing -->
         <div style="flex:1;overflow-y:auto;padding:8px 0;max-height:400px;">
           <div v-if="currentDirEntries.parent" @click="goUp" style="display:flex;align-items:center;gap:10px;padding:8px 20px;cursor:pointer;color:#8A8F98;font-size:13px;" class="hover-span">📁 ..</div>
           <div v-for="entry in currentDirEntries.entries" :key="entry.name"
@@ -189,7 +179,6 @@
           </div>
         </div>
 
-        <!-- Manual input fallback -->
         <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);">
           <input type="text" v-model="filePickerPath" placeholder="或直接输入路径，如 /input/BDROM" @keyup.enter="selectPath" />
         </div>
@@ -201,7 +190,6 @@
       </div>
     </div>
 
-    <!-- Preview modal (Issue 2) -->
     <div v-if="showPreviewPanel" style="position:fixed;inset:0;z-index:160;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="closePreview">
       <div class="glass" style="width:500px;padding:24px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
@@ -213,7 +201,7 @@
           <div>
             <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">预览文件</div>
             <select v-model="previewFile" style="width:100%;">
-              <option v-for="f in selectedFiles" :key="f" :value="f">{{ mockFiles.find(m => m.id === f)?.name }}</option>
+              <option v-for="f in selectedFiles" :key="f" :value="f">{{ parsedFiles.find(m => (m.id || m.path) === f)?.name || f }}</option>
             </select>
           </div>
           <div class="flex gap-4" style="display:flex;gap:12px;">
@@ -258,7 +246,6 @@
       </div>
     </div>
 
-    <!-- Unified config creation modal (Issue 7) -->
     <ConfigCreateModal :visible="showCreateConfig" @close="showCreateConfig = false" @saved="onWizardConfigSaved" />
   </Teleport>
 </template>
@@ -267,6 +254,7 @@
 import { ref, computed, watch } from 'vue'
 import { PhPlay } from '@phosphor-icons/vue'
 import ConfigCreateModal from '../components/ConfigCreateModal.vue'
+import { api } from '@/api'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -274,32 +262,33 @@ const emit = defineEmits<{ close: [] }>()
 const steps = ['源文件', '文件选择', '转码配置', '目标路径']
 const step = ref(0)
 const sourcePath = ref('')
-const selectedFiles = ref<number[]>([])
-const selectedConfig = ref<number | null>(null)
+const selectedFiles = ref<any[]>([])
+const selectedConfigId = ref<number | null>(null)
 const outputPath = ref('/output')
 const outputNameTemplate = ref('{disc}_{track}.mkv')
+const error = ref('')
 
-const mockDiscName = 'AMAZING_ANIME_BD_1'
-const mockFiles = [
-  { id: 0, name: 'BDMV/STREAM/00000.m2ts', size: '24.2 GB' },
-  { id: 1, name: 'BDMV/STREAM/00001.m2ts', size: '19.8 GB' },
-  { id: 2, name: 'BDMV/STREAM/00002.m2ts', size: '3.1 GB' },
-  { id: 3, name: 'BDMV/STREAM/00003.m2ts', size: '6.4 GB' },
-]
-
-const parsedAudioTracks = ref([
-  { id: 'a1', label: 'FLAC 2.0', lang: 'Japanese' },
-  { id: 'a2', label: 'FLAC 2.0', lang: 'Commentary' },
-  { id: 'a3', label: 'AAC 2.0', lang: 'Japanese' },
-])
-const parsedSubtitleTracks = ref([
-  { id: 's1', label: 'PGS', lang: 'Japanese' },
-  { id: 's2', label: 'PGS', lang: 'English' },
-  { id: 's3', label: 'PGS', lang: 'Chinese' },
-])
-const selectedAudio = ref<string[]>(['a1'])
-const selectedSubtitles = ref<string[]>(['s1'])
+const discName = ref('')
+const parsedFiles = ref<any[]>([])
+const parsedAudioTracks = ref<any[]>([])
+const parsedSubtitleTracks = ref<any[]>([])
+const selectedAudio = ref<string[]>([])
+const selectedSubtitles = ref<string[]>([])
 const chaptersEnabled = ref(true)
+
+async function parseStep2() {
+  if (!sourcePath.value) return
+  error.value = ''
+  try {
+    const result = await api.wizard.parse(sourcePath.value)
+    discName.value = result.disc_name || sourcePath.value.split('/').pop() || '未知'
+    parsedFiles.value = result.files || []
+    wizardStep.value = 2
+  } catch {
+    discName.value = sourcePath.value.split('/').pop() || '未知'
+  }
+  step.value = 1
+}
 
 function toggleTrack(track: any, type: string) {
   const arr = type === 'audio' ? selectedAudio : selectedSubtitles
@@ -308,36 +297,19 @@ function toggleTrack(track: any, type: string) {
   else arr.value.push(track.id)
 }
 
-const allConfigs = ref([
-  { id: 0, name: 'x265 HQ Anime', encoder: 'x265', mode: 'cpu', isPreset: true,
-    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
-    params: { crf: 15, preset: 'slower', deblock: '-1:-1', ctu: 32, 'qg-size': 8, me: 'star', subme: 5, merange: 38, bframes: 6, ref: 4, qcomp: 0.65, 'aq-mode': 1, 'aq-strength': 0.8, 'no-sao': true, 'psy-rd': 2.0, 'psy-rdoq': 1.0, 'rdoq-level': 2, rd: 5, pbratio: 1.2, cbqpoffs: -2, crqpoffs: -2, keyint: 360 } },
-  { id: 1, name: 'x264 高画质 (mbtree on)', encoder: 'x264', mode: 'cpu', isPreset: true,
-    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
-    params: { crf: 18, preset: 'veryslow', tune: 'animation', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', mbtree: 1, 'rc-lookahead': 250, ref: 16, bframes: 16, subme: 11, merange: 48 } },
-  { id: 2, name: 'x265 均衡', encoder: 'x265', mode: 'cpu', isPreset: true,
-    audio: { codec: 'AAC', bitrate: '192kbps' },
-    params: { crf: 20, preset: 'medium', 'aq-mode': 3, 'aq-strength': 0.7, deblock: '0:0', bframes: 8, 'rc-lookahead': 40 } },
-  { id: 3, name: 'x264 高画质 (mbtree off)', encoder: 'x264', mode: 'cpu', isPreset: true,
-    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
-    params: { crf: 16, preset: 'veryslow', tune: 'animation', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', mbtree: 0, 'rc-lookahead': 250, ref: 16, bframes: 16, subme: 11 } },
-  { id: 4, name: 'NVENC 快速编码', encoder: 'h264_nvenc', mode: 'gpu', isPreset: false,
-    audio: { codec: 'OPUS', bitrate: '192kbps' },
-    params: { crf: 20, preset: 'p7', tune: 'hq', rc: 'vbr', b_ref_mode: 'middle', multipass: 'qres', 'aq-strength': 8, lookahead: 32, bframes: 4 } },
-  { id: 5, name: '我的自定义配置', encoder: 'x265', mode: 'cpu', isPreset: false,
-    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
-    params: { crf: 17, preset: 'slow', 'aq-mode': 3, 'aq-strength': 0.9, deblock: '-1:-1', 'no-sao': true, bframes: 12 } },
-])
+const allConfigs = ref<any[]>([])
 
 const showCreateConfig = ref(false)
-let nextWizId = 6
-function onWizardConfigSaved(config: any) {
-  const newId = nextWizId++
-  allConfigs.value.push({ id: newId, ...config })
-  selectedConfig.value = newId
+async function onWizardConfigSaved(config: any) {
+  try {
+    const configs = await api.configs.list()
+    const presets = await api.presets()
+    allConfigs.value = [...presets, ...configs]
+    const saved = configs.find((c: any) => c.name === config.name)
+    if (saved) selectedConfigId.value = saved.id
+  } catch {}
 }
 
-// ── File picker (Issue 1) ──
 const showFilePicker = ref(false)
 const filePickerPath = ref('/')
 const pickerTarget = ref<'source' | 'output'>('source')
@@ -425,7 +397,6 @@ function selectPath() {
   }
 }
 
-// ── Preview (Issue 2) ──
 const showPreviewPanel = ref(false)
 const previewState = ref<'idle'|'running'|'completed'>('idle')
 const previewProgress = ref(0)
@@ -435,10 +406,49 @@ const previewSpeed = ref('3.2')
 const previewOutputSize = ref('12.4 MB')
 const previewDuration = ref('60')
 const previewStartTime = ref('00:05:00')
-const previewFile = ref(0)
+const previewFile = ref<any>(null)
+const previewId = ref<number | null>(null)
 let previewInterval: ReturnType<typeof setInterval> | null = null
 
-function startPreview() {
+async function startPreview() {
+  error.value = ''
+  try {
+    const res = await api.preview.create({
+      source_file: previewFile.value,
+      start_time: previewStartTime.value,
+      duration: parseInt(previewDuration.value),
+    })
+    previewId.value = res.id
+    previewState.value = 'running'
+    previewProgress.value = 0
+    const check = setInterval(async () => {
+      try {
+        const s = await api.preview.status(previewId.value!)
+        previewProgress.value = s.progress * 100
+        previewFrame.value = Math.floor(s.progress * previewTotalFrames.value)
+        if (s.status === 'completed') {
+          previewProgress.value = 100
+          previewFrame.value = previewTotalFrames.value
+          previewState.value = 'completed'
+          previewOutputSize.value = s.size || '—'
+          clearInterval(check)
+        }
+        if (s.status === 'failed') {
+          previewState.value = 'idle'
+          error.value = '预览转码失败'
+          clearInterval(check)
+        }
+      } catch {
+        clearInterval(check)
+        startMockPreview()
+      }
+    }, 1000)
+  } catch {
+    startMockPreview()
+  }
+}
+
+function startMockPreview() {
   previewState.value = 'running'
   previewProgress.value = 0
   previewFrame.value = 0
@@ -457,14 +467,18 @@ function startPreview() {
 
 function cancelPreview() {
   if (previewInterval) clearInterval(previewInterval)
+  if (previewId.value) {
+    api.preview.delete(previewId.value).catch(() => {})
+    previewId.value = null
+  }
   previewState.value = 'idle'
 }
 
 function downloadPreviewFile() {
-  const a = document.createElement('a')
-  a.href = '#'
-  a.download = 'preview_sample.mkv'
-  a.click()
+  if (previewId.value) {
+    const url = api.preview.downloadUrl(previewId.value, 'preview')
+    window.open(url, '_blank')
+  }
 }
 
 function closePreview() {
@@ -473,20 +487,48 @@ function closePreview() {
   previewState.value = 'idle'
 }
 
-// ── Completion ──
 const wizardComplete = ref(false)
 const createdTaskName = ref('')
+const wizardStep = ref(0)
 
-function finish() { createdTaskName.value = mockDiscName + '_转码任务'; wizardComplete.value = true }
+async function finishWizard() {
+  error.value = ''
+  try {
+    await api.tasks.create({
+      name: discName.value,
+      source_path: sourcePath.value,
+      output_path: outputPath.value,
+      config_id: selectedConfigId.value,
+      files: selectedFiles.value.map((f: any) => ({
+        source_file: f,
+        streams: '{}',
+        selected: true,
+      })),
+    })
+    createdTaskName.value = discName.value + '_转码任务'
+    wizardComplete.value = true
+  } catch (e: any) {
+    error.value = e.message
+  }
+}
 
 function closeWizard() {
   wizardComplete.value = false; step.value = 0; sourcePath.value = ''; selectedFiles.value = []
-  selectedConfig.value = null; showPreviewPanel.value = false; previewState.value = 'idle'
+  selectedConfigId.value = null; showPreviewPanel.value = false; previewState.value = 'idle'
+  error.value = ''
   emit('close')
 }
 
 watch(() => props.visible, (val) => {
-  if (val) { step.value = 0; sourcePath.value = ''; selectedFiles.value = []; selectedConfig.value = null; outputPath.value = '/output'; showPreviewPanel.value = false; previewState.value = 'idle'; wizardComplete.value = false }
+  if (val) {
+    step.value = 0; sourcePath.value = ''; selectedFiles.value = []; selectedConfigId.value = null;
+    outputPath.value = '/output'; showPreviewPanel.value = false; previewState.value = 'idle';
+    wizardComplete.value = false; error.value = ''
+    allConfigs.value = []
+    Promise.all([api.configs.list(), api.presets()]).then(([configs, presets]) => {
+      allConfigs.value = [...presets, ...configs]
+    }).catch(() => {})
+  }
 })
 </script>
 

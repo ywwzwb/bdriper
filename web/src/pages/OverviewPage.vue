@@ -11,21 +11,64 @@
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;">
-      <div v-for="s in stats" :key="s.label" class="glass" style="padding:20px;">
+      <div class="glass" style="padding:20px;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <div class="stat-icon" :style="{background: s.bg}">
-            <component :is="s.icon" :size="18" :color="s.color" />
+          <div class="stat-icon" style="background:rgba(94,106,210,0.12);">
+            <PhCpu :size="18" color="#5E6AD2" />
           </div>
-          <span style="font-size:13px;color:#8A8F98;">{{ s.label }}</span>
+          <span style="font-size:13px;color:#8A8F98;">CPU 使用率</span>
         </div>
         <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
-          <span style="font-size:32px;font-weight:700;color:#EDEDEF;">{{ s.value }}</span>
-          <span v-if="s.unit" style="font-size:13px;color:#8A8F98;">{{ s.unit }}</span>
+          <span style="font-size:32px;font-weight:700;color:#EDEDEF;">{{ stats.cpu_usage.toFixed(1) }}</span>
+          <span style="font-size:13px;color:#8A8F98;">%</span>
         </div>
-        <div v-if="s.progress !== null" class="progress-track">
-          <div class="progress-fill" :style="{width: s.progress + '%'}" />
+        <div class="progress-track">
+          <div class="progress-fill" :style="{width: stats.cpu_usage + '%'}" />
         </div>
-        <div v-if="s.detail" style="font-size:12px;color:#8A8F98;margin-top:6px;">{{ s.detail }}</div>
+      </div>
+
+      <div class="glass" style="padding:20px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="stat-icon" style="background:rgba(34,197,94,0.12);">
+            <PhMonitor :size="18" color="#22C55E" />
+          </div>
+          <span style="font-size:13px;color:#8A8F98;">GPU</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
+          <span style="font-size:32px;font-weight:700;color:#EDEDEF;">{{ stats.gpu_available ? stats.gpu_usage.toFixed(1) : 'N/A' }}</span>
+          <span v-if="stats.gpu_available" style="font-size:13px;color:#8A8F98;">%</span>
+        </div>
+        <div v-if="stats.gpu_available" class="progress-track">
+          <div class="progress-fill" style="background:rgba(34,197,94,0.8);" :style="{width: stats.gpu_usage + '%'}" />
+        </div>
+        <div style="font-size:12px;color:#8A8F98;margin-top:6px;">{{ stats.gpu_available ? stats.gpu_vendor : '无可用 GPU' }}</div>
+      </div>
+
+      <div class="glass" style="padding:20px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="stat-icon" style="background:rgba(245,158,11,0.12);">
+            <PhPlay :size="18" color="#F59E0B" />
+          </div>
+          <span style="font-size:13px;color:#8A8F98;">运行中</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
+          <span style="font-size:32px;font-weight:700;color:#EDEDEF;">{{ stats.running }}</span>
+          <span style="font-size:13px;color:#8A8F98;">/ {{ stats.total }} 个任务</span>
+        </div>
+      </div>
+
+      <div class="glass" style="padding:20px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="stat-icon" style="background:rgba(168,85,247,0.12);">
+            <PhMemory :size="18" color="#A855F7" />
+          </div>
+          <span style="font-size:13px;color:#8A8F98;">内存</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
+          <span style="font-size:32px;font-weight:700;color:#EDEDEF;">{{ stats.mem_mb }}</span>
+          <span style="font-size:13px;color:#8A8F98;">MB</span>
+        </div>
+        <div style="font-size:12px;color:#8A8F98;margin-top:6px;">{{ stats.goroutines }} 个协程</div>
       </div>
     </div>
 
@@ -33,7 +76,7 @@
       <h2 style="font-size:18px;font-weight:600;margin-bottom:16px;">最近任务</h2>
       <div v-if="recentTasks.length" style="display:flex;flex-direction:column;gap:8px;">
         <div v-for="t in recentTasks" :key="t.id" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,0.02);">
-          <div :class="'badge badge-' + t.status">{{ t.statusLabel }}</div>
+          <div :class="'badge badge-' + t.status">{{ statusLabel(t.status) }}</div>
           <span style="font-size:14px;font-weight:500;">{{ t.name }}</span>
           <span style="font-size:12px;color:#8A8F98;margin-left:auto;">{{ t.time }}</span>
         </div>
@@ -46,21 +89,35 @@
 </template>
 <script setup lang="ts">
 import { PhCpu, PhMonitor, PhPlay, PhMemory } from '@phosphor-icons/vue'
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import WizardModal from '../wizard/WizardModal.vue'
+import { api } from '@/api'
 
 const showWizard = ref(false)
 
-const stats = ref([
-  { label: 'CPU 使用率', value: 13, unit: '%', progress: 13, bg: 'rgba(94,106,210,0.12)', color: '#5E6AD2', icon: PhCpu, detail: null },
-  { label: 'GPU', value: 'N/A', unit: '', progress: null, bg: 'rgba(34,197,94,0.12)', color: '#22C55E', icon: PhMonitor, detail: '无可用 GPU' },
-  { label: '运行中', value: 2, unit: '/ 5 个任务', progress: null, bg: 'rgba(245,158,11,0.12)', color: '#F59E0B', icon: PhPlay, detail: null },
-  { label: '内存', value: 24, unit: 'MB', progress: null, bg: 'rgba(168,85,247,0.12)', color: '#A855F7', icon: PhMemory, detail: '12 个协程' },
-])
+const stats = ref({ cpu_usage: 0, gpu_available: false, gpu_vendor: '', gpu_usage: 0, running: 0, total: 0, mem_mb: 0, goroutines: 0 })
+let timer: any
 
-const recentTasks = ref([
-  { id: 1, name: '四月は君の嘘 EP01', status: 'running', statusLabel: '运行中', time: '2 分钟前' },
-  { id: 2, name: 'Charlotte EP01', status: 'completed', statusLabel: '已完成', time: '15 分钟前' },
-  { id: 3, name: 'Kill la Kill EP01', status: 'failed', statusLabel: '失败', time: '32 分钟前' },
-])
+onMounted(async () => {
+  await fetchStatus()
+  timer = setInterval(fetchStatus, 5000)
+  try {
+    recentTasks.value = await api.tasks.list()
+  } catch {}
+})
+onUnmounted(() => clearInterval(timer))
+
+async function fetchStatus() {
+  try {
+    const data = await api.overview()
+    stats.value = data
+  } catch {}
+}
+
+const recentTasks = ref<any[]>([])
+
+function statusLabel(s: string) {
+  const m: Record<string, string> = { running: '运行中', completed: '已完成', failed: '失败', pending: '等待', paused: '已暂停' }
+  return m[s] || s
+}
 </script>
