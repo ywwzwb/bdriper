@@ -349,12 +349,14 @@ async function navigateTo(path: string) {
 }
 
 function enterDir(name: string) {
-  const sep = browserPath.value.endsWith('/') ? '' : '/'
-  navigateTo(browserPath.value + sep + name)
+  const newPath = browserPath.value === '/' ? '/' + name : browserPath.value + '/' + name
+  filePickerPath.value = newPath
+  navigateTo(newPath)
 }
 
 function goUp() {
   if (browserParent.value) {
+    filePickerPath.value = browserParent.value
     navigateTo(browserParent.value)
   }
 }
@@ -370,24 +372,36 @@ function openFilePicker(target: 'source' | 'output') {
   pickerTarget.value = target
   const initialPath = target === 'source' ? sourcePath.value : outputPath.value
   filePickerPath.value = initialPath || '/'
-  navigateTo('/')
+  const navPath = initialPath || '/'
+  navigateTo(navPath)
   showFilePicker.value = true
 }
 
 function selectFile(entry: DirEntry) {
-  const sep = browserPath.value.endsWith('/') ? '' : '/'
-  filePickerPath.value = browserPath.value + sep + entry.name
+  const newPath = browserPath.value === '/' ? '/' + entry.name : browserPath.value + '/' + entry.name
+  filePickerPath.value = newPath
+  selectPath()
 }
 
 function selectPath() {
-  if (filePickerPath.value) {
-    if (pickerTarget.value === 'source') {
-      sourcePath.value = filePickerPath.value
-    } else {
-      outputPath.value = filePickerPath.value
-    }
-    showFilePicker.value = false
-  }
+  const p = filePickerPath.value
+  if (!p) return
+  fetch(`/api/fs/list?path=${encodeURIComponent(p)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.entries && data.entries.length > 0) {
+        navigateTo(p)
+        return
+      }
+      if (pickerTarget.value === 'source') sourcePath.value = p
+      else outputPath.value = p
+      showFilePicker.value = false
+    })
+    .catch(() => {
+      if (pickerTarget.value === 'source') sourcePath.value = p
+      else outputPath.value = p
+      showFilePicker.value = false
+    })
 }
 
 const showPreviewPanel = ref(false)
