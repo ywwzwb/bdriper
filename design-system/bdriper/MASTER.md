@@ -7,8 +7,9 @@
 ---
 
 **Project:** BDRiper
-**Generated:** 2026-07-31 23:47:04
+**Generated:** 2026-08-01 01:21:48
 **Category:** Developer Tool / IDE
+**Design Dials:** Variance 4/10 (Balanced / Modern) | Motion 4/10 (Standard) | Density 6/10 (Standard)
 
 ---
 
@@ -44,6 +45,8 @@
 ```
 
 ### Spacing Variables
+
+*Density: 6/10 — Standard*
 
 | Token | Value | Usage |
 |-------|-------|-------|
@@ -158,21 +161,37 @@
 
 ## Style Guidelines
 
-**Style:** Dark Mode (OLED)
+**Style:** Modern Dark (Cinema Mobile)
 
-**Keywords:** Dark theme, low light, high contrast, deep black, midnight blue, eye-friendly, OLED, night mode, power efficient
+**Keywords:** dark mode, cinematic, ambient light, glassmorphism, deep black, indigo, glow, blur, atmospheric, reanimated, haptic, premium, layered, frosted glass, linear gradient
 
-**Best For:** Night-mode apps, coding platforms, entertainment, eye-strain prevention, OLED devices, low-light
+**Best For:** Developer tools, pro productivity apps, fintech/trading dashboards, media/streaming platforms, AI tool interfaces, high-end gaming companion apps
 
-**Key Effects:** Minimal glow (text-shadow: 0 0 10px), dark-to-light transitions, low white emission, high readability, visible focus
+**Key Effects:** Expo.out Bezier(0.16,1,0.3,1) easing; spring modals (damping:20 stiffness:90); haptic-linked press (Impact Light/Medium); animated ambient light blobs (Reanimated translateX/Y slow oscillation); BlurView glassmorphism headers/nav (intensity 20); scale press 0.97 → 1.0; avoid pure #000000 (OLED smear)
 
 ### Page Pattern
 
-**Pattern Name:** Real-Time / Operations Landing
+**Pattern Name:** Video-First Hero
 
-- **Conversion Strategy:** For ops/security/iot products. Demo or sandbox link. Trust signals.
-- **CTA Placement:** Primary CTA in nav + After metrics
-- **Section Order:** 1. Hero (product + live preview or status), 2. Key metrics/indicators, 3. How it works, 4. CTA (Start trial / Contact)
+- **Conversion Strategy:** 86% higher engagement with video. Add captions for accessibility. Compress video for performance.
+- **CTA Placement:** Overlay on video (center/bottom) + Bottom section
+- **Section Order:** 1. Hero with video background, 2. Key features overlay, 3. Benefits section, 4. CTA
+
+---
+
+## Motion
+
+**Stagger List** (Standard) — Trigger: load or scroll | Duration: 300-450ms | Easing: `back.out(1.4)`
+
+```js
+gsap.from('.grid-item', { opacity: 0, scale: 0.92, y: 16, duration: 0.4, stagger: { each: 0.06, from: 'start', grid: 'auto' }, ease: 'back.out(1.4)' });
+```
+
+**Framework notes:** grid: 'auto' lets GSAP infer rows/columns from a CSS grid layout for a natural wave stagger
+
+- ✅ Combine with from: 'center' for a bento-grid layout to draw the eye inward first
+- ❌ Don't use back.out on dense data tables; the overshoot reads as sloppy on informational UI
+- ⚡ Group DOM writes; avoid interleaving layout reads (getBoundingClientRect) between staggered tweens
 
 ---
 

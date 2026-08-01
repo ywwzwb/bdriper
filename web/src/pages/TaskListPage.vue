@@ -76,19 +76,40 @@
       <button class="btn-ghost" @click="selectedIds = []">取消选择</button>
     </div>
 
-    <!-- Config detail modal -->
+    <!-- Config detail modal (Issue 8) -->
     <Teleport to="body">
       <div v-if="configDetail" class="cfg-modal-overlay" @click.self="configDetail = null">
-        <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:50;width:560px;max-height:80vh;overflow:auto;padding:24px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-            <h3 style="font-size:18px;font-weight:700;">{{ configDetail.name }}</h3>
-            <button class="btn-ghost" style="padding:6px 12px;font-size:12px;" @click="configDetail = null">关闭</button>
+        <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:60;width:600px;max-height:80vh;overflow-y:auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <h3 style="font-weight:600;font-size:16px;">{{ configDetail.name }}</h3>
+              <span v-if="configDetail.isPreset" class="badge badge-pending">内置预设</span>
+              <span class="badge" :class="configDetail.mode === 'gpu' ? 'badge-running' : 'badge-pending'">{{ configDetail.mode === 'gpu' ? 'GPU' : 'CPU' }}</span>
+            </div>
+            <button @click="configDetail = null" style="color:#8A8F98;font-size:20px;cursor:pointer;background:none;border:none;">✕</button>
           </div>
-          <div style="font-size:13px;color:#8A8F98;margin-bottom:16px;">{{ configDetail.encoder }} | {{ configDetail.mode === 'gpu' ? 'GPU 加速' : 'CPU 编码' }}</div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <div v-for="(v, k) in configDetail.params" :key="k" style="display:flex;justify-content:space-between;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.02);">
-              <span style="color:#8A8F98;font-family:'JetBrains Mono',monospace;font-size:13px;">{{ k }}</span>
-              <span style="color:#EDEDEF;font-weight:500;font-family:'JetBrains Mono',monospace;font-size:13px;">{{ v }}</span>
+          <div style="padding:20px;">
+            <div style="margin-bottom:16px;">
+              <div style="color:#8A8F98;font-size:12px;">编码器</div>
+              <div style="font-weight:500;font-size:15px;">{{ configDetail.encoder }}</div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <div style="color:#8A8F98;font-size:12px;margin-bottom:8px;">视频参数</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">
+                <div v-for="(v,k) in configDetail.params" :key="k" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                  <span style="color:#8A8F98;font-size:13px;">{{ k }}</span>
+                  <span style="font-size:13px;font-family:monospace;">{{ v }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="configDetail.audio" style="margin-bottom:16px;">
+              <div style="color:#8A8F98;font-size:12px;margin-bottom:8px;">音频参数</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">
+                <div v-for="(v,k) in configDetail.audio" :key="k" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                  <span style="color:#8A8F98;font-size:13px;">{{ k }}</span>
+                  <span style="font-size:13px;">{{ v }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -146,12 +167,24 @@ const showWizard = ref(false)
 const selectedIds = ref<number[]>([])
 
 const configsMap: Record<string, any> = {
-  'x265 HQ Anime': { id: 0, name: 'x265 HQ Anime', encoder: 'x265', mode: 'cpu', isPreset: true, params: { crf: 15, preset: 'slower', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', 'no-sao': true, bframes: 16, 'rc-lookahead': 60, subme: 7, merange: 57 } },
-  'x264 高画质 (mbtree on)': { id: 1, name: 'x264 高画质 (mbtree on)', encoder: 'x264', mode: 'cpu', isPreset: true, params: { crf: 18, preset: 'veryslow', tune: 'animation', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', mbtree: 1, 'rc-lookahead': 250, ref: 16, bframes: 16, subme: 11, merange: 48 } },
-  'x265 均衡': { id: 2, name: 'x265 均衡', encoder: 'x265', mode: 'cpu', isPreset: true, params: { crf: 20, preset: 'medium', 'aq-mode': 3, 'aq-strength': 0.7, deblock: '0:0', bframes: 8, 'rc-lookahead': 40 } },
-  'x264 高画质 (mbtree off)': { id: 3, name: 'x264 高画质 (mbtree off)', encoder: 'x264', mode: 'cpu', isPreset: true, params: { crf: 16, preset: 'veryslow', tune: 'animation', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', mbtree: 0, 'rc-lookahead': 250, ref: 16, bframes: 16, subme: 11 } },
-  'NVENC 快速编码': { id: 4, name: 'NVENC 快速编码', encoder: 'h264_nvenc', mode: 'gpu', isPreset: false, params: { crf: 20, preset: 'p7', tune: 'hq', rc: 'vbr', b_ref_mode: 'middle', multipass: 'qres', 'aq-strength': 8, lookahead: 32, bframes: 4 } },
-  '我的自定义配置': { id: 5, name: '我的自定义配置', encoder: 'x265', mode: 'cpu', isPreset: false, params: { crf: 17, preset: 'slow', 'aq-mode': 3, 'aq-strength': 0.9, deblock: '-1:-1', 'no-sao': true, bframes: 12 } },
+  'x265 HQ Anime': { id: 0, name: 'x265 HQ Anime', encoder: 'x265', mode: 'cpu', isPreset: true,
+    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
+    params: { crf: 15, preset: 'slower', deblock: '-1:-1', ctu: 32, 'qg-size': 8, me: 'star', subme: 5, merange: 38, bframes: 6, ref: 4, qcomp: 0.65, 'aq-mode': 1, 'aq-strength': 0.8, 'no-sao': true, 'psy-rd': 2.0, 'psy-rdoq': 1.0, 'rdoq-level': 2, rd: 5, pbratio: 1.2, cbqpoffs: -2, crqpoffs: -2, keyint: 360 } },
+  'x264 高画质 (mbtree on)': { id: 1, name: 'x264 高画质 (mbtree on)', encoder: 'x264', mode: 'cpu', isPreset: true,
+    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
+    params: { crf: 18, preset: 'veryslow', tune: 'animation', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', mbtree: 1, 'rc-lookahead': 250, ref: 16, bframes: 16, subme: 11, merange: 48 } },
+  'x265 均衡': { id: 2, name: 'x265 均衡', encoder: 'x265', mode: 'cpu', isPreset: true,
+    audio: { codec: 'AAC', bitrate: '192kbps' },
+    params: { crf: 20, preset: 'medium', 'aq-mode': 3, 'aq-strength': 0.7, deblock: '0:0', bframes: 8, 'rc-lookahead': 40 } },
+  'x264 高画质 (mbtree off)': { id: 3, name: 'x264 高画质 (mbtree off)', encoder: 'x264', mode: 'cpu', isPreset: true,
+    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
+    params: { crf: 16, preset: 'veryslow', tune: 'animation', 'aq-mode': 3, 'aq-strength': 0.8, deblock: '1:1', mbtree: 0, 'rc-lookahead': 250, ref: 16, bframes: 16, subme: 11 } },
+  'NVENC 快速编码': { id: 4, name: 'NVENC 快速编码', encoder: 'h264_nvenc', mode: 'gpu', isPreset: false,
+    audio: { codec: 'OPUS', bitrate: '192kbps' },
+    params: { crf: 20, preset: 'p7', tune: 'hq', rc: 'vbr', b_ref_mode: 'middle', multipass: 'qres', 'aq-strength': 8, lookahead: 32, bframes: 4 } },
+  '我的自定义配置': { id: 5, name: '我的自定义配置', encoder: 'x265', mode: 'cpu', isPreset: false,
+    audio: { codec: 'FLAC', sampleRate: '48000Hz' },
+    params: { crf: 17, preset: 'slow', 'aq-mode': 3, 'aq-strength': 0.9, deblock: '-1:-1', 'no-sao': true, bframes: 12 } },
 }
 
 const configDetail = ref<any>(null)
