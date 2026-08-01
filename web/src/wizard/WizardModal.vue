@@ -248,8 +248,11 @@
           <div style="text-align:center;padding:24px;">
             <div style="font-size:32px;margin-bottom:8px;">✓</div>
             <div style="color:#22C55E;font-weight:600;margin-bottom:4px;">预览完成</div>
-            <div style="color:#8A8F98;font-size:13px;">{{ previewOutputSize }}</div>
-            <button class="btn-primary" style="margin-top:16px;" @click="closePreview">关闭</button>
+            <div style="color:#8A8F98;font-size:13px;margin-bottom:16px;">{{ previewOutputSize }}</div>
+            <div style="display:flex;gap:8px;justify-content:center;">
+              <button class="btn-primary" @click="downloadPreviewFile">下载预览文件</button>
+              <button class="btn-ghost" @click="closePreview">关闭</button>
+            </div>
           </div>
         </div>
       </div>
@@ -455,6 +458,13 @@ function startPreview() {
 function cancelPreview() {
   if (previewInterval) clearInterval(previewInterval)
   previewState.value = 'idle'
+}
+
+function downloadPreviewFile() {
+  const a = document.createElement('a')
+  a.href = '#'
+  a.download = 'preview_sample.mkv'
+  a.click()
 }
 
 function closePreview() {

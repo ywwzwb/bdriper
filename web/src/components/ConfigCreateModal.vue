@@ -90,9 +90,9 @@
         <!-- Professional mode — Step 1: Video params -->
         <div v-if="configStep === 1 && configMode === 'pro'">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-            <h3 style="font-weight:600;font-size:15px;">专业配置 — 视频参数</h3>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <select v-model="newConfig.encoder" style="width:180px;">
+            <h3 style="font-weight:600;">专业配置 — 视频参数</h3>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <select v-model="newConfig.encoder" style="width:180px;height:40px;">
                 <option value="x264">x264 (H.264)</option>
                 <option value="x265">x265 (H.265)</option>
                 <option value="h264_nvenc">NVIDIA NVENC H.264</option>
@@ -102,7 +102,7 @@
                 <option value="h264_amf">AMD AMF H.264</option>
                 <option value="hevc_amf">AMD AMF H.265</option>
               </select>
-              <button class="btn-ghost" style="padding:6px 10px;font-size:12px;" @click="openHelp">ⓘ 帮助</button>
+              <button class="btn-ghost" @click="openHelp" style="height:40px;padding:0 10px;display:flex;align-items:center;gap:4px;font-size:12px;">ⓘ 帮助</button>
             </div>
           </div>
 
@@ -119,7 +119,7 @@
                     </select>
                   </div>
                   <div v-if="param.hint" style="font-size:11px;color:rgba(255,255,255,0.3);text-align:right;margin-top:2px;">
-                    {{ param.hint }}
+                    推荐值: {{ param.hint }}
                   </div>
                 </div>
               </div>
@@ -293,7 +293,7 @@ const cpuParamGroups = [
   {
     name: '基础',
     params: [
-      { key: 'crf', label: 'CRF (质量)', type: 'number', hint: '15-18 推荐' },
+      { key: 'crf', label: 'CRF (质量)', type: 'number', hint: '15 — 18' },
       { key: 'preset', label: '预设', type: 'select', options: [
         { value: 'ultrafast', label: 'ultrafast' }, { value: 'veryfast', label: 'veryfast' },
         { value: 'faster', label: 'faster' }, { value: 'fast', label: 'fast' },
