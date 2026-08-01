@@ -129,7 +129,7 @@
             <div style="margin-bottom:24px;">
               <div style="color:#8A8F98;font-size:14px;margin-bottom:6px;">输出目录</div>
               <div style="display:flex;gap:8px;">
-                <input v-model="outputPath" placeholder="/output" style="flex:1;" />
+                <input type="text" v-model="outputPath" placeholder="/output" style="flex:1;" />
                 <button class="btn-ghost" @click="openFilePicker('output')" style="padding:10px 16px;">浏览</button>
               </div>
             </div>
@@ -191,7 +191,7 @@
 
         <!-- Manual input fallback -->
         <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);">
-          <input v-model="filePickerPath" placeholder="或直接输入路径，如 /input/BDROM" @keyup.enter="selectPath" />
+          <input type="text" v-model="filePickerPath" placeholder="或直接输入路径，如 /input/BDROM" @keyup.enter="selectPath" />
         </div>
 
         <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);">
@@ -219,7 +219,7 @@
           <div class="flex gap-4" style="display:flex;gap:12px;">
             <div style="flex:1;">
               <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">开始时间</div>
-              <input v-model="previewStartTime" placeholder="00:05:00" />
+              <input type="text" v-model="previewStartTime" placeholder="00:05:00" />
             </div>
             <div style="flex:1;">
               <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">时长</div>

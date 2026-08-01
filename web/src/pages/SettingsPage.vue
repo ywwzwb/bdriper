@@ -125,10 +125,10 @@
       <span style="font-size:14px;">设置已保存</span>
     </div>
 
-    <!-- Config detail modal (Issue 8) -->
+    <!-- Config detail modal -->
     <Teleport to="body">
-      <div v-if="configDetail" class="set-modal-overlay" @click.self="configDetail = null">
-        <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:60;width:600px;max-height:80vh;overflow-y:auto;">
+      <div v-if="configDetail" class="set-modal-overlay" @click.self="configDetail = null" style="z-index:80;">
+        <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:80;width:600px;max-height:80vh;overflow-y:auto;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
             <div style="display:flex;align-items:center;gap:10px;">
               <h3 style="font-weight:600;font-size:16px;">{{ configDetail.name }}</h3>
@@ -165,45 +165,7 @@
       </div>
     </Teleport>
 
-    <!-- Edit config modal -->
-    <Teleport to="body">
-      <div v-if="editingConfig" class="set-modal-overlay" @click.self="editingConfig = null">
-        <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:60;width:480px;max-height:80vh;overflow:auto;padding:24px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-            <h3 style="font-size:18px;font-weight:700;">编辑配置</h3>
-            <button class="btn-ghost" style="padding:6px 12px;font-size:12px;" @click="editingConfig = null">取消</button>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:14px;">
-            <div>
-              <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">配置名称</label>
-              <input type="text" v-model="editingConfig.name" />
-            </div>
-            <div>
-              <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">编码器</label>
-              <select v-model="editingConfig.encoder">
-                <option value="x265">x265</option>
-                <option value="x264">x264</option>
-                <option value="h264_nvenc">h264_nvenc</option>
-                <option value="hevc_nvenc">hevc_nvenc</option>
-              </select>
-            </div>
-            <div>
-              <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">编码模式</label>
-              <select v-model="editingConfig.mode">
-                <option value="cpu">CPU</option>
-                <option value="gpu">GPU</option>
-              </select>
-            </div>
-          </div>
-          <div style="margin-top:20px;display:flex;justify-content:flex-end;">
-            <button class="btn-primary" @click="saveEditedConfig">保存</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Unified config creation modal (Issue 7) -->
-    <ConfigCreateModal :visible="showCreateConfig" @close="showCreateConfig = false" @saved="onConfigSaved" />
+    <ConfigCreateModal :visible="showCreateConfig" :edit-config="editingConfig" @close="showCreateConfig = false; editingConfig = null" @saved="onConfigSaved" />
   </div>
 </template>
 <script setup lang="ts">
@@ -257,19 +219,18 @@ const showCreateConfig = ref(false)
 
 let nextId = 6
 function onConfigSaved(config: any) {
-  configs.value.push({ id: nextId++, ...config })
+  if (config.id !== undefined) {
+    const idx = configs.value.findIndex(c => c.id === config.id)
+    if (idx !== -1) configs.value[idx] = config
+  } else {
+    configs.value.push({ id: nextId++, ...config })
+  }
 }
 
 const editingConfig = ref<any>(null)
 function editConfig(cfg: any) {
-  editingConfig.value = { ...cfg }
-}
-function saveEditedConfig() {
-  const idx = configs.value.findIndex(c => c.id === editingConfig.value.id)
-  if (idx !== -1) {
-    configs.value[idx] = editingConfig.value
-  }
-  editingConfig.value = null
+  editingConfig.value = cfg
+  showCreateConfig.value = true
 }
 
 function deleteConfig(cfg: any) {

@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="visible" class="cfg-overlay" @click.self="cancel">
-      <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:70;width:640px;max-height:85vh;overflow-y:auto;padding:24px;">
+      <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;width:640px;max-height:85vh;overflow-y:auto;padding:24px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
           <h3 style="font-size:18px;font-weight:700;">新建编码配置</h3>
           <button class="btn-ghost" style="padding:6px 12px;font-size:12px;" @click="cancel">取消</button>
@@ -79,7 +79,7 @@
           </div>
           <div>
             <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">配置名称</div>
-            <input v-model="newConfig.name" placeholder="输入配置名称" />
+            <input type="text" v-model="newConfig.name" placeholder="输入配置名称" />
           </div>
           <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
             <button class="btn-ghost" @click="cancel">取消</button>
@@ -165,7 +165,7 @@
           </div>
           <div>
             <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">配置名称</div>
-            <input v-model="newConfig.name" placeholder="输入配置名称" />
+            <input type="text" v-model="newConfig.name" placeholder="输入配置名称" />
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:8px;">
             <button class="btn-ghost" @click="configStep = 1">上一步</button>
@@ -179,7 +179,7 @@
     </div>
 
     <!-- Help modal -->
-    <div v-if="showHelp" style="position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="showHelp = false">
+    <div v-if="showHelp" style="position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="showHelp = false">
       <div class="glass" style="width:700px;max-height:80vh;display:flex;flex-direction:column;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
           <div style="display:flex;align-items:center;gap:12px;">
@@ -269,9 +269,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 
-const props = defineProps<{ visible: boolean }>()
+const props = defineProps<{ visible: boolean; editConfig?: any }>()
 const emit = defineEmits<{ close: []; saved: [config: any] }>()
 
 const configStep = ref(0)
@@ -387,6 +387,18 @@ function cancel() {
   emit('close')
 }
 
+watch(() => props.editConfig, (cfg) => {
+  if (cfg) {
+    configMode.value = 'pro'
+    newConfig.name = cfg.name || ''
+    newConfig.encoder = cfg.encoder || 'x265'
+    newConfig.audioEncoder = (cfg.audio?.codec || 'flac').toLowerCase()
+    newConfig.audioBitrate = cfg.audio?.bitrate ? String(cfg.audio.bitrate).replace('kbps', '') : '192'
+    newConfig.params = { ...defaultParams, ...cfg.params }
+    configStep.value = 1
+  }
+}, { immediate: true })
+
 function saveNewConfig() {
   const name = newConfig.name || '未命名配置'
   const mode = newConfig.encoder.includes('nvenc') || newConfig.encoder.includes('qsv') || newConfig.encoder.includes('amf') ? 'gpu' : 'cpu'
@@ -404,7 +416,11 @@ function saveNewConfig() {
   if (audioEncoder !== 'flac' && audioEncoder !== 'copy') {
     audio.bitrate = audioBitrate + 'kbps'
   }
-  emit('saved', { name, encoder: newConfig.encoder, mode, isPreset: false, params, audio })
+  const result: any = { name, encoder: newConfig.encoder, mode, isPreset: false, params, audio }
+  if (props.editConfig) {
+    result.id = props.editConfig.id
+  }
+  emit('saved', result)
   resetForm()
 }
 </script>
@@ -415,7 +431,7 @@ function saveNewConfig() {
   background: rgba(0,0,0,0.6);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  z-index: 69;
+  z-index: 110;
 }
 .hover-span:hover { background: rgba(94,106,210,0.1); }
 </style>
