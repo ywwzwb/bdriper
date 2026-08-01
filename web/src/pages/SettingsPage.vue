@@ -145,56 +145,148 @@
       </div>
     </Teleport>
 
-    <!-- Create config modal -->
+    <!-- Create config modal (multi-step mini-wizard) -->
     <Teleport to="body">
-      <div v-if="showCreateConfig" class="set-modal-overlay" @click.self="showCreateConfig = false">
-        <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:50;width:480px;max-height:80vh;overflow:auto;padding:24px;">
+      <div v-if="showCreateConfig" class="set-modal-overlay" @click.self="cancelCreateConfig">
+        <div class="glass" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:50;width:540px;max-height:80vh;overflow:auto;padding:24px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
             <h3 style="font-size:18px;font-weight:700;">新建编码配置</h3>
-            <button class="btn-ghost" style="padding:6px 12px;font-size:12px;" @click="showCreateConfig = false">取消</button>
+            <button class="btn-ghost" style="padding:6px 12px;font-size:12px;" @click="cancelCreateConfig">取消</button>
           </div>
-          <div style="display:flex;flex-direction:column;gap:14px;">
-            <div>
-              <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">配置名称</label>
-              <input type="text" v-model="newConfig.name" placeholder="我的配置" />
+
+          <!-- Mode selector -->
+          <div v-if="configStep === 0" style="text-align:center;padding:20px 0;">
+            <div style="font-size:15px;font-weight:600;margin-bottom:20px;">选择配置模式</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div class="hover-span" @click="startSimpleConfig" style="padding:24px;cursor:pointer;text-align:center;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);">
+                <div style="font-size:32px;margin-bottom:8px;">⚡</div>
+                <div style="font-weight:600;margin-bottom:4px;">简易模式</div>
+                <div style="font-size:12px;color:#8A8F98;">基础参数，快速配置</div>
+              </div>
+              <div class="hover-span" @click="startProConfig" style="padding:24px;cursor:pointer;text-align:center;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);">
+                <div style="font-size:32px;margin-bottom:8px;">🔧</div>
+                <div style="font-weight:600;margin-bottom:4px;">专业模式</div>
+                <div style="font-size:12px;color:#8A8F98;">完整参数，精细调优</div>
+              </div>
             </div>
+          </div>
+
+          <!-- Simple mode form -->
+          <div v-if="configStep === 1 && configMode === 'simple'" style="display:flex;flex-direction:column;gap:16px;">
+            <div style="font-weight:600;">简易配置</div>
             <div>
-              <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">编码器</label>
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">视频编码器</div>
               <select v-model="newConfig.encoder">
-                <option value="x265">x265</option>
-                <option value="x264">x264</option>
-                <option value="h264_nvenc">h264_nvenc</option>
-                <option value="hevc_nvenc">hevc_nvenc</option>
+                <option value="x264">x264 (H.264)</option>
+                <option value="x265">x265 (H.265)</option>
+                <option value="h264_nvenc">NVENC H.264</option>
+                <option value="hevc_nvenc">NVENC H.265</option>
               </select>
             </div>
             <div>
-              <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">编码模式</label>
-              <select v-model="newConfig.mode">
-                <option value="cpu">CPU</option>
-                <option value="gpu">GPU</option>
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">音频编码器</div>
+              <select v-model="newConfig.audioEncoder">
+                <option value="flac">FLAC (无损)</option>
+                <option value="aac">AAC (有损)</option>
+                <option value="opus">Opus (有损)</option>
+              </select>
+            </div>
+            <div v-if="newConfig.audioEncoder !== 'flac'">
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">音频码率</div>
+              <select v-model="newConfig.audioBitrate">
+                <option value="128">128 kbps</option>
+                <option value="192">192 kbps</option>
+                <option value="256">256 kbps</option>
+                <option value="320">320 kbps</option>
               </select>
             </div>
             <div>
-              <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">CRF</label>
-              <input type="number" v-model.number="newConfig.crf" min="0" max="51" />
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">视频质量</div>
+              <select v-model="newConfig.quality">
+                <option value="lossless">无损</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
             </div>
             <div>
-              <label style="font-size:13px;color:#8A8F98;display:block;margin-bottom:6px;">Preset</label>
-              <select v-model="newConfig.preset">
-                <option value="ultrafast">ultrafast</option>
-                <option value="superfast">superfast</option>
-                <option value="veryfast">veryfast</option>
-                <option value="faster">faster</option>
-                <option value="fast">fast</option>
-                <option value="medium">medium</option>
-                <option value="slow">slow</option>
-                <option value="slower">slower</option>
-                <option value="veryslow">veryslow</option>
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">编码速度</div>
+              <select v-model="newConfig.speed">
+                <option value="slow">慢 (高质量)</option>
+                <option value="medium">平衡</option>
+                <option value="fast">快 (低质量)</option>
               </select>
+            </div>
+            <div>
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">位深</div>
+              <select v-model="newConfig.depth">
+                <option value="10">10-bit</option>
+                <option value="8">8-bit</option>
+              </select>
+            </div>
+            <div>
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">配置名称</div>
+              <input v-model="newConfig.name" placeholder="输入配置名称" />
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+              <button class="btn-ghost" @click="cancelCreateConfig">取消</button>
+              <button class="btn-primary" @click="saveNewConfig">保存配置</button>
             </div>
           </div>
-          <div style="margin-top:20px;display:flex;justify-content:flex-end;">
-            <button class="btn-primary" @click="createConfig">创建配置</button>
+
+          <!-- Professional mode — Step A: Video params -->
+          <div v-if="configStep === 1 && configMode === 'pro'" style="display:flex;flex-direction:column;gap:12px;">
+            <div style="font-weight:600;">专业配置 — 视频参数</div>
+            <details v-for="group in paramGroups" :key="group.name" class="glass" style="padding:12px 16px;" open>
+              <summary style="font-weight:500;cursor:pointer;font-size:14px;">{{ group.name }}</summary>
+              <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px;">
+                <div v-for="param in group.params" :key="param.key" style="display:flex;align-items:center;justify-content:space-between;">
+                  <span style="font-size:13px;color:#8A8F98;">{{ param.label }}</span>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <input v-if="param.type === 'number'" type="number" v-model="newConfig.params[param.key]" style="width:100px;text-align:right;" />
+                    <select v-else v-model="newConfig.params[param.key]" style="width:140px;">
+                      <option v-for="o in param.options" :key="o.value" :value="o.value">{{ o.label }}</option>
+                    </select>
+                    <span v-if="param.hint" style="font-size:11px;color:#8A8F98;">{{ param.hint }}</span>
+                  </div>
+                </div>
+              </div>
+            </details>
+            <button class="btn-primary" @click="configStep = 2" style="align-self:flex-end;">下一步: 音频配置</button>
+          </div>
+
+          <!-- Professional mode — Step B: Audio + naming -->
+          <div v-if="configStep === 2 && configMode === 'pro'" style="display:flex;flex-direction:column;gap:16px;">
+            <div style="font-weight:600;">专业配置 — 音频参数</div>
+            <div>
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">音频编码器</div>
+              <select v-model="newConfig.audioEncoder">
+                <option value="flac">FLAC (无损)</option>
+                <option value="aac">AAC (有损)</option>
+                <option value="opus">Opus</option>
+                <option value="copy">复制原始音轨</option>
+              </select>
+            </div>
+            <div v-if="newConfig.audioEncoder !== 'flac' && newConfig.audioEncoder !== 'copy'">
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">音频码率</div>
+              <select v-model="newConfig.audioBitrate">
+                <option value="128">128 kbps</option>
+                <option value="192">192 kbps</option>
+                <option value="256">256 kbps</option>
+                <option value="320">320 kbps</option>
+              </select>
+            </div>
+            <div>
+              <div style="color:#8A8F98;font-size:13px;margin-bottom:4px;">配置名称</div>
+              <input v-model="newConfig.name" placeholder="输入配置名称" />
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:8px;">
+              <button class="btn-ghost" @click="configStep = 1">上一步</button>
+              <div style="display:flex;gap:8px;">
+                <button class="btn-ghost" @click="cancelCreateConfig">取消</button>
+                <button class="btn-primary" @click="saveNewConfig">保存配置</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -273,20 +365,75 @@ const configDetail = ref<any>(null)
 function viewConfigDetail(cfg: any) { configDetail.value = cfg }
 
 const showCreateConfig = ref(false)
-const newConfig = ref({ name: '', encoder: 'x265', mode: 'cpu', crf: 18, preset: 'medium' })
-let nextId = 6
-function createConfig() {
-  const name = newConfig.value.name || '未命名配置'
-  configs.value.push({
-    id: nextId++,
-    name,
-    encoder: newConfig.value.encoder,
-    mode: newConfig.value.mode,
-    isPreset: false,
-    params: { crf: newConfig.value.crf, preset: newConfig.value.preset },
-  })
+const configStep = ref(0)
+const configMode = ref<'simple' | 'pro'>('simple')
+
+const defaultParams = { crf: 18, preset: 'medium', tune: 'animation', keyint: 600, bframes: 8, ref: 13, qcomp: 0.75, aq_mode: '3', aq_strength: 0.8, me: 'star', subme: 10, merange: 24 } as Record<string, any>
+
+const newConfig = ref({
+  name: '', encoder: 'x265', mode: 'cpu',
+  audioEncoder: 'flac', audioBitrate: '192',
+  quality: 'high', speed: 'medium', depth: '10',
+  params: { ...defaultParams },
+})
+
+const paramGroups = [
+  {
+    name: '基础',
+    params: [
+      { key: 'crf', label: 'CRF (质量)', type: 'number', hint: '15-18 推荐' },
+      { key: 'preset', label: '预设', type: 'select', options: [{ value: 'ultrafast', label: 'ultrafast' }, { value: 'veryfast', label: 'veryfast' }, { value: 'faster', label: 'faster' }, { value: 'fast', label: 'fast' }, { value: 'medium', label: 'medium' }, { value: 'slow', label: 'slow (推荐)' }, { value: 'slower', label: 'slower (推荐)' }, { value: 'veryslow', label: 'veryslow (推荐)' }] },
+      { key: 'tune', label: '优化', type: 'select', options: [{ value: 'animation', label: 'animation' }, { value: 'film', label: 'film' }, { value: 'grain', label: 'grain' }, { value: 'stillimage', label: 'stillimage' }] },
+    ]
+  },
+  {
+    name: '帧类型',
+    params: [
+      { key: 'keyint', label: 'GOP 区间', type: 'number', hint: '600' },
+      { key: 'bframes', label: 'B 帧数', type: 'number', hint: '8' },
+      { key: 'ref', label: '参考帧', type: 'number', hint: '13' },
+    ]
+  },
+  {
+    name: '码率控制',
+    params: [
+      { key: 'qcomp', label: 'QComp', type: 'number', hint: '0.75' },
+      { key: 'aq_mode', label: 'AQ 模式', type: 'select', options: [{ value: '1', label: '1 - 标准' }, { value: '2', label: '2 - 自动' }, { value: '3', label: '3 - 动漫推荐' }] },
+      { key: 'aq_strength', label: 'AQ 强度', type: 'number', hint: '0.8' },
+    ]
+  },
+  {
+    name: '运动估计',
+    params: [
+      { key: 'me', label: '运动搜索', type: 'select', options: [{ value: 'hex', label: 'hex' }, { value: 'umh', label: 'umh' }, { value: 'star', label: 'star' }, { value: 'tesa', label: 'tesa' }] },
+      { key: 'subme', label: '亚像素', type: 'number', hint: '10' },
+      { key: 'merange', label: '搜索范围', type: 'number', hint: '24' },
+    ]
+  },
+]
+
+function startSimpleConfig() { configMode.value = 'simple'; configStep.value = 1 }
+function startProConfig() { configMode.value = 'pro'; configStep.value = 1 }
+function cancelCreateConfig() {
   showCreateConfig.value = false
-  newConfig.value = { name: '', encoder: 'x265', mode: 'cpu', crf: 18, preset: 'medium' }
+  configStep.value = 0
+  newConfig.value = { name: '', encoder: 'x265', mode: 'cpu', audioEncoder: 'flac', audioBitrate: '192', quality: 'high', speed: 'medium', depth: '10', params: { ...defaultParams } }
+}
+
+let nextId = 6
+function saveNewConfig() {
+  const name = newConfig.value.name || '未命名配置'
+  const mode = newConfig.value.encoder.includes('nvenc') || newConfig.value.encoder.includes('qsv') || newConfig.value.encoder.includes('amf') ? 'gpu' : 'cpu'
+  let params: Record<string, any>
+  if (configMode.value === 'simple') {
+    const qualityMap: Record<string, number> = { lossless: 0, high: 15, medium: 20, low: 23 }
+    const speedMap: Record<string, string> = { slow: 'slower', medium: 'medium', fast: 'veryfast' }
+    params = { crf: qualityMap[newConfig.value.quality] || 18, preset: speedMap[newConfig.value.speed] || 'medium' }
+  } else {
+    params = { ...newConfig.value.params }
+  }
+  configs.value.push({ id: nextId++, name, encoder: newConfig.value.encoder, mode, isPreset: false, params })
+  cancelCreateConfig()
 }
 
 const editingConfig = ref<any>(null)
@@ -333,4 +480,5 @@ async function detectGPU() {
   -webkit-backdrop-filter: blur(6px);
   z-index: 49;
 }
+.hover-span:hover { background: rgba(94,106,210,0.1); }
 </style>
