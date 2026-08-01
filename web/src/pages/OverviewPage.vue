@@ -5,9 +5,9 @@
         <h1 style="font-size:28px;font-weight:700;color:#EDEDEF;">概览</h1>
         <p style="color:#8A8F98;margin-top:4px;font-size:14px;">系统资源与任务状态</p>
       </div>
-      <router-link to="/tasks?wizard=open" class="btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+      <button class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;" @click="showWizard = true">
         <span style="font-size:18px;">+</span> 新建任务
-      </router-link>
+      </button>
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;">
@@ -40,11 +40,16 @@
       </div>
       <div v-else style="text-align:center;padding:40px;color:#8A8F98;">暂无最近任务</div>
     </div>
+
+    <WizardModal :visible="showWizard" @close="showWizard = false" />
   </div>
 </template>
 <script setup lang="ts">
 import { PhCpu, PhMonitor, PhPlay, PhMemory } from '@phosphor-icons/vue'
 import { ref } from 'vue'
+import WizardModal from '../wizard/WizardModal.vue'
+
+const showWizard = ref(false)
 
 const stats = ref([
   { label: 'CPU 使用率', value: 13, unit: '%', progress: 13, bg: 'rgba(94,106,210,0.12)', color: '#5E6AD2', icon: PhCpu, detail: null },
