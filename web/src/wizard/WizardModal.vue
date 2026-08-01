@@ -152,7 +152,7 @@
       </div>
     </div>
 
-    <div v-if="showFilePicker" style="position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="showFilePicker = false">
+    <div v-if="showFilePicker" style="position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="showFilePicker = false">
       <div class="glass" style="width:560px;max-height:70vh;display:flex;flex-direction:column;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
           <span style="font-weight:600;font-size:15px;">浏览文件</span>
@@ -177,7 +177,10 @@
             <span style="flex:1;">{{ entry.name }}</span>
             <span v-if="!entry.is_dir" style="font-size:11px;color:#8A8F98;">{{ formatSize(entry.size) }}</span>
           </div>
-          <div v-if="browserEntries.length === 0 && !browserLoading" style="padding:40px;text-align:center;color:#8A8F98;font-size:13px;">
+          <div v-if="browserError" style="padding:40px;text-align:center;color:#EF4444;font-size:13px;">
+            {{ browserError }}
+          </div>
+          <div v-else-if="browserEntries.length === 0 && !browserLoading" style="padding:40px;text-align:center;color:#8A8F98;font-size:13px;">
             此目录为空
           </div>
         </div>
@@ -324,16 +327,22 @@ const browserEntries = ref<DirEntry[]>([])
 const browserLoading = ref(false)
 const browserParent = ref('')
 
+const browserError = ref('')
+
 async function navigateTo(path: string) {
   browserPath.value = path
   browserLoading.value = true
+  browserError.value = ''
   try {
     const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`)
+    if (!res.ok) throw new Error('无法访问')
     const data = await res.json()
     browserEntries.value = data.entries || []
     browserParent.value = data.parent || ''
-  } catch {
+  } catch (e: any) {
+    browserError.value = '无法读取该目录'
     browserEntries.value = []
+    browserParent.value = ''
   } finally {
     browserLoading.value = false
   }
@@ -359,8 +368,9 @@ function formatSize(bytes: number): string {
 
 function openFilePicker(target: 'source' | 'output') {
   pickerTarget.value = target
-  filePickerPath.value = sourcePath.value || outputPath.value || '/'
-  navigateTo(filePickerPath.value || '/')
+  const initialPath = target === 'source' ? sourcePath.value : outputPath.value
+  filePickerPath.value = initialPath || '/'
+  navigateTo('/')
   showFilePicker.value = true
 }
 

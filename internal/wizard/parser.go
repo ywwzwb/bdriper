@@ -41,29 +41,43 @@ type FileStreamInfo struct {
 }
 
 func ParseBDMV(sourcePath string) (*BDMVInfo, error) {
-	streamDir := filepath.Join(sourcePath, "BDMV", "STREAM")
+	var streamDir string
+	var metaRoot string
+
+	// Pattern 1: path/BDMV/STREAM (sourcePath is the disc root)
+	if _, err := os.Stat(filepath.Join(sourcePath, "BDMV", "STREAM")); err == nil {
+		streamDir = filepath.Join(sourcePath, "BDMV", "STREAM")
+		metaRoot = sourcePath
+	} else if _, err := os.Stat(filepath.Join(sourcePath, "STREAM")); err == nil {
+		// Pattern 2: path/STREAM (sourcePath IS the BDMV directory)
+		streamDir = filepath.Join(sourcePath, "STREAM")
+		metaRoot = filepath.Dir(sourcePath)
+	} else {
+		return nil, fmt.Errorf("not a valid BDMV directory: %s (expected BDMV/STREAM or STREAM subdirectory)", sourcePath)
+	}
+
 	entries, err := os.ReadDir(streamDir)
 	if err != nil {
 		return nil, fmt.Errorf("read STREAM dir: %w", err)
 	}
 
 	info := &BDMVInfo{
-		DiscName: parseDiscName(sourcePath),
+		DiscName: parseDiscName(metaRoot),
 	}
 
-	var m2tsFiles []string
 	for _, e := range entries {
-		if strings.HasSuffix(strings.ToLower(e.Name()), ".m2ts") {
-			m2tsFiles = append(m2tsFiles, filepath.Join(streamDir, e.Name()))
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".m2ts") {
+			f := filepath.Join(streamDir, e.Name())
+			bf, err := probeM2TS(f)
+			if err != nil {
+				continue
+			}
+			info.Files = append(info.Files, *bf)
 		}
 	}
 
-	for _, f := range m2tsFiles {
-		bf, err := probeM2TS(f)
-		if err != nil {
-			continue
-		}
-		info.Files = append(info.Files, *bf)
+	if len(info.Files) == 0 {
+		return nil, fmt.Errorf("no .m2ts files found in %s", streamDir)
 	}
 
 	return info, nil
@@ -73,6 +87,7 @@ func parseDiscName(sourcePath string) string {
 	metaFiles := []string{
 		filepath.Join(sourcePath, "BDMV", "META", "DL", "bdmt_eng.xml"),
 		filepath.Join(sourcePath, "BDMV", "META", "DL", "bdmt_jpn.xml"),
+		filepath.Join(sourcePath, "META", "DL", "bdmt_eng.xml"),
 	}
 	for _, mf := range metaFiles {
 		data, err := os.ReadFile(mf)
