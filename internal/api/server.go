@@ -39,6 +39,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/tasks/{id}/retry", s.handleRetryTask)
 	mux.HandleFunc("POST /api/tasks/batch", s.handleBatchTasks)
 
+	mux.HandleFunc("GET /api/fs/list", s.handleFSList)
+
 	mux.HandleFunc("POST /api/wizard/parse", s.handleParseBDMV)
 	mux.HandleFunc("GET /api/wizard/file/{path}/streams", s.handleFileStreams)
 

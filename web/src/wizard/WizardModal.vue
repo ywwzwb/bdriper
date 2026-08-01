@@ -152,35 +152,38 @@
       </div>
     </div>
 
-    <div v-if="showFilePicker" style="position:fixed;inset:0;z-index:160;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="showFilePicker = false">
-      <div class="glass" style="width:520px;max-height:70vh;display:flex;flex-direction:column;">
-        <div style="display:flex;align-items:center;gap:8px;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
+    <div v-if="showFilePicker" style="position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);" @click.self="showFilePicker = false">
+      <div class="glass" style="width:560px;max-height:70vh;display:flex;flex-direction:column;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
           <span style="font-weight:600;font-size:15px;">浏览文件</span>
+          <button @click="showFilePicker = false" style="color:#8A8F98;font-size:20px;cursor:pointer;background:none;border:none;">✕</button>
         </div>
 
-        <div style="display:flex;align-items:center;gap:4px;padding:8px 20px;font-size:13px;color:#8A8F98;flex-wrap:wrap;">
-          <template v-for="(seg, i) in pathSegments" :key="i">
-            <span @click="navigateTo(i)" style="cursor:pointer;color:#5E6AD2;" class="hover-span">{{ seg || '/' }}</span>
-            <span v-if="i < pathSegments.length - 1" style="color:#475569;">/</span>
-          </template>
+        <div style="padding:8px 20px;font-size:13px;color:#8A8F98;border-bottom:1px solid rgba(255,255,255,0.04);">
+          📂 {{ browserPath }}
         </div>
 
-        <div style="flex:1;overflow-y:auto;padding:8px 0;max-height:400px;">
-          <div v-if="currentDirEntries.parent" @click="goUp" style="display:flex;align-items:center;gap:10px;padding:8px 20px;cursor:pointer;color:#8A8F98;font-size:13px;" class="hover-span">📁 ..</div>
-          <div v-for="entry in currentDirEntries.entries" :key="entry.name"
-               @click="entry.isDir ? enterDir(entry.name) : selectEntry(entry.name)"
-               style="display:flex;align-items:center;gap:10px;padding:8px 20px;cursor:pointer;font-size:13px;"
-               :style="{color: entry.isDir ? '#5E6AD2' : '#EDEDEF'}" class="hover-span">
-            <span>{{ entry.isDir ? '📁' : '📄' }}</span>
-            <span>{{ entry.name }}</span>
+        <div v-if="browserLoading" style="padding:40px;text-align:center;color:#8A8F98;">加载中...</div>
+
+        <div v-else style="flex:1;overflow-y:auto;max-height:350px;">
+          <div v-if="browserParent !== ''" @click="goUp" style="display:flex;align-items:center;gap:10px;padding:8px 20px;cursor:pointer;color:#5E6AD2;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.03);" class="hover-span">
+            📁 ..
           </div>
-          <div v-if="!currentDirEntries.entries.length && !currentDirEntries.parent" style="padding:20px;text-align:center;color:#8A8F98;font-size:13px;">
-            无法读取目录内容<br/>(容器环境限制，请手动输入路径)
+          <div v-for="entry in browserEntries" :key="entry.name"
+               @click="entry.is_dir ? enterDir(entry.name) : selectFile(entry)"
+               style="display:flex;align-items:center;gap:10px;padding:8px 20px;cursor:pointer;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.03);"
+               :style="{color: entry.is_dir ? '#5E6AD2' : '#EDEDEF'}" class="hover-span">
+            <span>{{ entry.is_dir ? '📁' : '📄' }}</span>
+            <span style="flex:1;">{{ entry.name }}</span>
+            <span v-if="!entry.is_dir" style="font-size:11px;color:#8A8F98;">{{ formatSize(entry.size) }}</span>
+          </div>
+          <div v-if="browserEntries.length === 0 && !browserLoading" style="padding:40px;text-align:center;color:#8A8F98;font-size:13px;">
+            此目录为空
           </div>
         </div>
 
         <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);">
-          <input type="text" v-model="filePickerPath" placeholder="或直接输入路径，如 /input/BDROM" @keyup.enter="selectPath" />
+          <input type="text" v-model="filePickerPath" :placeholder="browserPath" @keyup.enter="selectPath" style="width:100%;" />
         </div>
 
         <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);">
@@ -251,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { PhPlay } from '@phosphor-icons/vue'
 import ConfigCreateModal from '../components/ConfigCreateModal.vue'
 import { api } from '@/api'
@@ -314,76 +317,56 @@ const showFilePicker = ref(false)
 const filePickerPath = ref('/')
 const pickerTarget = ref<'source' | 'output'>('source')
 
-interface DirEntry { name: string; isDir: boolean }
-const currentDirEntries = ref<{ entries: DirEntry[]; parent: boolean }>({ entries: [], parent: false })
+interface DirEntry { name: string; is_dir: boolean; size: number }
 
-const mockFs: Record<string, string[]> = {
-  '/': ['input', 'output', 'mnt', 'tmp', 'home'],
-  '/input': ['BDROM', '四月は君の嘘_Vol1', 'Charlotte_Vol1.iso'],
-  '/input/BDROM': ['BDMV'],
-  '/input/BDROM/BDMV': ['STREAM', 'PLAYLIST', 'CLIPINF'],
-  '/input/BDROM/BDMV/STREAM': ['00000.m2ts', '00001.m2ts', '00002.m2ts', '00003.m2ts'],
-  '/mnt': ['bdmv'],
-}
+const browserPath = ref('/')
+const browserEntries = ref<DirEntry[]>([])
+const browserLoading = ref(false)
+const browserParent = ref('')
 
-function pathJoin(a: string, b: string): string {
-  if (a.endsWith('/')) return a + b
-  return a + '/' + b
-}
-
-function pathParent(p: string): string {
-  if (p === '/') return '/'
-  const idx = p.lastIndexOf('/')
-  return idx === 0 ? '/' : p.substring(0, idx)
-}
-
-const pathSegments = computed(() => {
-  if (filePickerPath.value === '/') return ['']
-  return filePickerPath.value.split('/').filter(s => s)
-})
-
-function loadDir(path: string) {
-  const dirs = mockFs[path]
-  if (dirs) {
-    currentDirEntries.value = {
-      entries: dirs.map(name => ({ name, isDir: !name.includes('.') })),
-      parent: path !== '/',
-    }
-  } else {
-    currentDirEntries.value = { entries: [], parent: path !== '/' }
+async function navigateTo(path: string) {
+  browserPath.value = path
+  browserLoading.value = true
+  try {
+    const res = await fetch(`/api/fs/list?path=${encodeURIComponent(path)}`)
+    const data = await res.json()
+    browserEntries.value = data.entries || []
+    browserParent.value = data.parent || ''
+  } catch {
+    browserEntries.value = []
+  } finally {
+    browserLoading.value = false
   }
+}
+
+function enterDir(name: string) {
+  const sep = browserPath.value.endsWith('/') ? '' : '/'
+  navigateTo(browserPath.value + sep + name)
+}
+
+function goUp() {
+  if (browserParent.value) {
+    navigateTo(browserParent.value)
+  }
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB'
+  if (bytes < 1024*1024*1024) return (bytes/(1024*1024)).toFixed(1) + ' MB'
+  return (bytes/(1024*1024*1024)).toFixed(1) + ' GB'
 }
 
 function openFilePicker(target: 'source' | 'output') {
   pickerTarget.value = target
-  filePickerPath.value = target === 'source' ? sourcePath.value || '/' : outputPath.value || '/'
+  filePickerPath.value = sourcePath.value || outputPath.value || '/'
+  navigateTo(filePickerPath.value || '/')
   showFilePicker.value = true
-  loadDir('/')
 }
 
-function enterDir(name: string) {
-  filePickerPath.value = pathJoin(filePickerPath.value, name)
-  loadDir(filePickerPath.value)
-}
-
-function navigateTo(idx: number) {
-  const parts = pathSegments.value
-  if (idx === 0) {
-    filePickerPath.value = '/'
-  } else {
-    filePickerPath.value = '/' + parts.slice(0, idx + 1).join('/')
-  }
-  loadDir(filePickerPath.value)
-}
-
-function goUp() {
-  filePickerPath.value = pathParent(filePickerPath.value)
-  loadDir(filePickerPath.value)
-}
-
-function selectEntry(name: string) {
-  filePickerPath.value = pathJoin(filePickerPath.value, name)
-  selectPath()
+function selectFile(entry: DirEntry) {
+  const sep = browserPath.value.endsWith('/') ? '' : '/'
+  filePickerPath.value = browserPath.value + sep + entry.name
 }
 
 function selectPath() {
