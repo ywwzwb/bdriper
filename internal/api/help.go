@@ -12,6 +12,7 @@ func (s *Server) handleHelpDoc(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "x264-params"
 	}
+	name = filepath.Base(name) // prevent path traversal
 
 	path := filepath.Join(s.HelpDir, name+".md")
 	html, err := help.RenderFile(path)

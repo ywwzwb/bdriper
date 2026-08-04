@@ -19,7 +19,6 @@
     "subme": 10,
     "me_range": 24,
     "psy-rd": 0.6,
-    "psy-trellis": 0.0,
     "no-fast-pskip": true,
     "colormatrix": "bt709",
     "chroma-qp-offset": -1,

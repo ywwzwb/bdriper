@@ -3,14 +3,15 @@ package task
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 type PipelineConfig struct {
 	SourceFile      string
 	OutputDir       string
+	TaskID          int64
 	AudioTracks     []int
 	SubtitleTracks  []int
 	ChaptersEnabled bool
@@ -24,7 +25,7 @@ func extractStreams(cfg PipelineConfig) ([]*exec.Cmd, error) {
 
 	for _, idx := range cfg.AudioTracks {
 		audioOut := fmt.Sprintf("%s_audio_%d.flac", base, idx)
-		cmd := exec.Command("ffmpeg",
+		cmd := exec.Command("/usr/bin/ffmpeg",
 			"-i", cfg.SourceFile,
 			"-map", fmt.Sprintf("0:%d", idx),
 			"-c:a", "flac",
@@ -35,7 +36,7 @@ func extractStreams(cfg PipelineConfig) ([]*exec.Cmd, error) {
 
 	for _, idx := range cfg.SubtitleTracks {
 		subOut := fmt.Sprintf("%s_subtitle_%d.sup", base, idx)
-		cmd := exec.Command("ffmpeg",
+		cmd := exec.Command("/usr/bin/ffmpeg",
 			"-i", cfg.SourceFile,
 			"-map", fmt.Sprintf("0:%d", idx),
 			"-c:s", "copy",
@@ -47,8 +48,10 @@ func extractStreams(cfg PipelineConfig) ([]*exec.Cmd, error) {
 	return cmds, nil
 }
 
-func encodeVideo(cfg PipelineConfig) (*exec.Cmd, error) {
-	videoOut := fmt.Sprintf("%s_video.265", filepath.Join(cfg.OutputDir, filepath.Base(cfg.SourceFile)))
+func encodeVideo(cfg PipelineConfig) (*exec.Cmd, *exec.Cmd, error) {
+	baseName := filepath.Base(cfg.SourceFile)
+	ext := filepath.Ext(baseName)
+	videoOut := filepath.Join(cfg.OutputDir, fmt.Sprintf("%s_t%d%s_video.265", baseName[:len(baseName)-len(ext)], cfg.TaskID, ext))
 
 	if cfg.VideoEncoder == "x264" || cfg.VideoEncoder == "x265" {
 		var params map[string]any
@@ -74,14 +77,35 @@ func encodeVideo(cfg PipelineConfig) (*exec.Cmd, error) {
 			}
 		}
 
-		encoderArgs := strings.Join(flags, " ")
-		return exec.Command("bash", "-c", fmt.Sprintf(
-			"ffmpeg -i %s -f yuv4mpegpipe -pix_fmt yuv420p10le -strict -1 - 2>/dev/null | %s --y4m %s -o %s -",
-			cfg.SourceFile, cfg.VideoEncoder, encoderArgs, videoOut,
-		)), nil
+		ffmpegArgs := []string{
+			"-i", cfg.SourceFile,
+			"-f", "yuv4mpegpipe",
+			"-pix_fmt", "yuv420p",
+			"-strict", "-1",
+			"-",
+		}
+		ffmpegCmd := exec.Command("/usr/bin/ffmpeg", ffmpegArgs...)
+
+		encoderPath := "/usr/bin/" + cfg.VideoEncoder
+		encoderArgs := []string{"-o", videoOut, "-"}
+		if cfg.VideoEncoder == "x264" {
+			encoderArgs = append([]string{"--demuxer", "y4m"}, encoderArgs...)
+		} else {
+			encoderArgs = append([]string{"--y4m"}, encoderArgs...)
+		}
+		encoderArgs = append(encoderArgs, flags...)
+		encoderCmd := exec.Command(encoderPath, encoderArgs...)
+
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		encoderCmd.Stdin = pr
+		ffmpegCmd.Stdout = pw
+		return ffmpegCmd, encoderCmd, nil
 	}
 
-	return exec.Command("ffmpeg",
+	return nil, exec.Command("ffmpeg",
 		"-hwaccel", "auto",
 		"-i", cfg.SourceFile,
 		"-c:v", cfg.VideoEncoder,
@@ -89,11 +113,14 @@ func encodeVideo(cfg PipelineConfig) (*exec.Cmd, error) {
 	), nil
 }
 
-func muxMKV(videoFile string, outputDir string, sourceFile string) *exec.Cmd {
-	base := filepath.Join(outputDir, filepath.Base(sourceFile))
-	output := base + ".mkv"
-	return exec.Command("mkvmerge",
+func muxMKV(videoFile string, outputDir string, sourceFile string, taskID int64) *exec.Cmd {
+	baseName := filepath.Base(sourceFile)
+	ext := filepath.Ext(baseName)
+	output := filepath.Join(outputDir, fmt.Sprintf("%s_t%d%s.mkv", baseName[:len(baseName)-len(ext)], taskID, ext))
+	// Take video from encoded file, everything else from source
+	return exec.Command("/usr/bin/mkvmerge",
 		"-o", output,
+		"--no-video", sourceFile,
 		videoFile,
 	)
 }

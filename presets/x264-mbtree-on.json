@@ -2,7 +2,7 @@
   "name": "x264 High Quality (mbtree on)",
   "encoder": "x264",
   "mode": "cpu",
-  "description": "高质量动漫 BDRip。CRF=16.5, mbtree 开启, aq-mode=3。",
+  "description": "\u9ad8\u8d28\u91cf\u52a8\u6f2b BDRip\u3002CRF=16.5, mbtree \u5f00\u542f, aq-mode=3\u3002",
   "params": {
     "crf": 16.5,
     "preset": "veryslow",
@@ -18,8 +18,7 @@
     "me": "tesa",
     "subme": 10,
     "me_range": 24,
-    "psy-rd": 0.6,
-    "psy-trellis": 0.15,
+    "psy-rd": "0.6:0.15",
     "no-fast-pskip": true,
     "colormatrix": "bt709",
     "input-depth": 16,

@@ -90,7 +90,7 @@
           <button class="btn-primary" style="padding:8px 18px;font-size:13px;" @click="showCreateConfig = true">+ 新建配置</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <div v-for="cfg in configs" :key="cfg.id" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.02);">
+          <div v-for="cfg in configs" :key="cfg.id || cfg.name" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.02);">
             <div>
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="font-size:14px;font-weight:500;">{{ cfg.name }}</span>
@@ -179,14 +179,21 @@ const saved = ref(false)
 const error = ref('')
 const saving = ref(false)
 
+async function loadConfigs() {
+  try {
+    const [presets, userCfgs] = await Promise.all([api.presets(), api.configs.list()])
+    const presetNames = new Set(presets.map((p: any) => p.name))
+    const userOnly = (userCfgs || []).filter((c: any) => !presetNames.has(c.name))
+    configs.value = [...presets.map((p: any) => ({ ...p, isPreset: true })), ...userOnly]
+  } catch {}
+}
+
 onMounted(async () => {
   try {
     const settings = await api.settings.list()
     Object.assign(form, settings)
   } catch {}
-  try {
-    configs.value = await api.configs.list()
-  } catch {}
+  loadConfigs()
 })
 
 async function save() {
@@ -226,7 +233,7 @@ const showCreateConfig = ref(false)
 const editingConfig = ref<any>(null)
 
 async function onConfigSaved(config: any) {
-  try { configs.value = await api.configs.list() } catch {}
+  loadConfigs()
 }
 
 function editConfig(cfg: any) {

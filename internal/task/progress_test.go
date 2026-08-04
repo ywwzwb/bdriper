@@ -45,13 +45,13 @@ func TestParseProgressX265(t *testing.T) {
 	}
 }
 
-func TestX264PercentRegex(t *testing.T) {
-	matches := x264PercentRe.FindStringSubmatch("50.5z% 1515/3000 frames,")
+func TestX264FrameRegex(t *testing.T) {
+	matches := x264FrameRe.FindStringSubmatch("1515 frames: 2.23 fps, 2345.67 kb/s")
 	if matches == nil {
-		t.Fatal("x264PercentRe did not match")
+		t.Fatal("x264FrameRe did not match")
 	}
-	if matches[1] != "50.5" {
-		t.Errorf("captured percent = %q, want 50.5", matches[1])
+	if matches[1] != "1515" {
+		t.Errorf("captured frame = %q, want 1515", matches[1])
 	}
 }
 
@@ -62,7 +62,6 @@ func TestParseProgressNoMatch(t *testing.T) {
 
 	go func() {
 		parseProgress(r, 0, ch)
-		close(ch)
 	}()
 
 	pi, ok := <-ch
@@ -80,7 +79,6 @@ frame=  200 fps=10.0 q=28.0 size=    1024kB time=00:00:08.00 bitrate=1000.0kbits
 
 	go func() {
 		parseProgress(r, 300, ch)
-		close(ch)
 	}()
 
 	var frames []int64

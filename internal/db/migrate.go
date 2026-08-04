@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS preview_jobs (
     duration INTEGER NOT NULL DEFAULT 0,
     output_file TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending',
+    progress REAL NOT NULL DEFAULT 0.0,
     expires_at DATETIME NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

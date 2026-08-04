@@ -2,8 +2,10 @@ package log
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 )
 
@@ -33,11 +35,22 @@ func (h *BroadcastHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 func (h *BroadcastHandler) Handle(_ context.Context, r slog.Record) error {
+	var attrs []string
+	r.Attrs(func(a slog.Attr) bool {
+		attrs = append(attrs, fmt.Sprintf("%s=%v", a.Key, a.Value))
+		return true
+	})
+	attrStr := ""
+	if len(attrs) > 0 {
+		attrStr = " " + strings.Join(attrs, " ")
+	}
+	raw := r.Time.Format("2006-01-02T15:04:05") + " [" + r.Level.String() + "] " + r.Message + attrStr + "\n"
+
 	entry := LogEntry{
 		Level: r.Level.String(),
 		Time:  r.Time.Format("2006-01-02T15:04:05"),
-		Msg:   r.Message,
-		Raw:   r.Time.Format("2006-01-02T15:04:05") + " [" + r.Level.String() + "] " + r.Message + "\n",
+		Msg:   r.Message + attrStr,
+		Raw:   raw,
 	}
 	h.writer.Write([]byte(entry.Raw))
 	h.mu.RLock()

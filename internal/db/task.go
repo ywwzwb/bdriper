@@ -2,7 +2,7 @@ package db
 
 import (
 	"database/sql"
-	"encoding/json"
+	"log/slog"
 	"time"
 )
 
@@ -16,6 +16,7 @@ type Task struct {
 	EstimatedETA string    `json:"estimated_eta"`
 	PID          int       `json:"pid"`
 	ConfigID     int64     `json:"config_id"`
+	ConfigName   string    `json:"config_name"`
 	ErrorMsg     string    `json:"error_msg"`
 	Deleted      bool      `json:"deleted"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -42,13 +43,13 @@ func CreateTask(db *sql.DB, t *Task) (int64, error) {
 }
 
 func ListTasks(db *sql.DB, status string) ([]Task, error) {
-	query := `SELECT id,name,status,source_path,output_path,progress,estimated_eta,pid,config_id,error_msg,created_at,updated_at FROM tasks WHERE deleted=0`
+	query := `SELECT t.id,t.name,t.status,t.source_path,t.output_path,t.progress,t.estimated_eta,t.pid,t.config_id,t.error_msg,t.created_at,t.updated_at,COALESCE(c.name,'') FROM tasks t LEFT JOIN transcode_configs c ON t.config_id=c.id WHERE t.deleted=0`
 	args := []any{}
 	if status != "" && status != "all" {
-		query += " AND status = ?"
+		query += " AND t.status = ?"
 		args = append(args, status)
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY t.created_at DESC"
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ func ListTasks(db *sql.DB, status string) ([]Task, error) {
 	tasks := make([]Task, 0)
 	for rows.Next() {
 		var t Task
-		rows.Scan(&t.ID, &t.Name, &t.Status, &t.SourcePath, &t.OutputPath, &t.Progress, &t.EstimatedETA, &t.PID, &t.ConfigID, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)
+		rows.Scan(&t.ID, &t.Name, &t.Status, &t.SourcePath, &t.OutputPath, &t.Progress, &t.EstimatedETA, &t.PID, &t.ConfigID, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt, &t.ConfigName)
 		tasks = append(tasks, t)
 	}
 	return tasks, nil
@@ -145,4 +146,15 @@ func UpdateFileEntry(db *sql.DB, id int64, updates map[string]any) error {
 	return err
 }
 
-var _ = json.Marshal
+func RecoverOrphanedTasks(db *sql.DB, logger *slog.Logger) {
+	result, err := db.Exec(`UPDATE tasks SET status='failed', error_msg='server restarted, task lost', updated_at=CURRENT_TIMESTAMP WHERE status IN ('running','pending')`)
+	if err != nil {
+		logger.Error("failed to recover orphaned tasks", "error", err)
+		return
+	}
+	n, _ := result.RowsAffected()
+	if n > 0 {
+		logger.Info("orphaned tasks marked as failed", "count", n)
+	}
+}
+

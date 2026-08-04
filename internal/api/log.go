@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request) {
-	entries := make([]log.LogEntry, 0)
+	var allLines []string
 
 	logDir := filepath.Join(s.DataDir, "logs")
 	files, _ := filepath.Glob(filepath.Join(logDir, "*.log"))
@@ -22,17 +22,16 @@ func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		for _, line := range strings.Split(string(data), "\n") {
-			if strings.TrimSpace(line) == "" {
-				continue
+			if strings.TrimSpace(line) != "" {
+				allLines = append(allLines, line)
 			}
-			entries = append(entries, log.LogEntry{
-				Raw: line + "\n",
-				Msg: line,
-			})
 		}
 	}
 
-	writeJSON(w, http.StatusOK, entries)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"lines": allLines,
+		"total": len(allLines),
+	})
 }
 
 func (s *Server) handleDownloadLogs(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +79,8 @@ func (s *Server) handleWSLogs(w http.ResponseWriter, r *http.Request) {
 	defer s.LogHandler.Unsubscribe(ch)
 
 	for entry := range ch {
-		if err := conn.WriteJSON(entry); err != nil {
+		var e log.LogEntry = entry
+		if err := conn.WriteJSON(e); err != nil {
 			return
 		}
 	}

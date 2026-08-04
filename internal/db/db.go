@@ -17,7 +17,8 @@ func Open(dataDir string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(2)
 	if err := migrate(db); err != nil {
 		return nil, err
 	}

@@ -14,17 +14,26 @@ import (
 
 func (s *Server) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		TaskID     int64  `json:"task_id"`
-		SourceFile string `json:"source_file"`
-		StartTime  string `json:"start_time"`
-		Duration   int    `json:"duration"`
+		TaskID      int64          `json:"task_id"`
+		SourceFile  string         `json:"source_file"`
+		StartTime   string         `json:"start_time"`
+		Duration    int            `json:"duration"`
+		Encoder     string         `json:"encoder"`
+		VideoParams map[string]any `json:"video_params"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	outputFile := filepath.Join(s.DataDir, "previews", strconv.FormatInt(time.Now().UnixNano(), 10)+".mp4")
+	if input.Encoder == "" {
+		input.Encoder = "x264"
+	}
+	if input.VideoParams == nil {
+		input.VideoParams = map[string]any{}
+	}
+
+	outputFile := filepath.Join(s.DataDir, "previews", strconv.FormatInt(time.Now().UnixNano(), 10)+".mkv")
 	os.MkdirAll(filepath.Dir(outputFile), 0755)
 
 	pj := &db.PreviewJob{
@@ -44,8 +53,16 @@ func (s *Server) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		preview.RunPreview(pj.SourceFile, pj.StartTime, pj.Duration, pj.OutputFile)
-		db.UpdatePreview(s.DB, id, map[string]any{"status": "completed"})
+		cmd, progressCh, err := preview.RunPreview(pj.SourceFile, pj.StartTime, input.Encoder, input.VideoParams, pj.Duration, pj.OutputFile)
+		if err != nil {
+			db.UpdatePreview(s.DB, id, map[string]any{"status": "failed"})
+			return
+		}
+		for pct := range progressCh {
+			db.UpdatePreview(s.DB, id, map[string]any{"progress": pct})
+		}
+		cmd.Wait()
+		db.UpdatePreview(s.DB, id, map[string]any{"status": "completed", "progress": 1.0})
 	}()
 
 	pj.ID = id
@@ -69,6 +86,8 @@ func (s *Server) handlePreviewDownload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "preview not found")
 		return
 	}
+	w.Header().Set("Content-Disposition", "attachment; filename=preview.mkv")
+	w.Header().Set("Content-Type", "video/x-matroska")
 	http.ServeFile(w, r, p.OutputFile)
 }
 

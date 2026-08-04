@@ -36,39 +36,53 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := &db.Task{
-		Name:       input.Name,
-		Status:     "pending",
-		SourcePath: input.SourcePath,
-		OutputPath: input.OutputPath,
-		ConfigID:   input.ConfigID,
-	}
-	taskID, err := db.CreateTask(s.DB, task)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if s.Runner != nil {
+		// Create one task per selected file
+		var created []db.Task
+		for _, f := range input.Files {
+			if !f.Selected {
+				continue
+			}
+			fileName := filepath.Base(f.SourceFile)
+			fileTask := &db.Task{
+				Name:       input.Name + " - " + fileName,
+				Status:     "pending",
+				SourcePath: input.SourcePath,
+				OutputPath: input.OutputPath,
+				ConfigID:   input.ConfigID,
+			}
+			ftID, err := db.CreateTask(s.DB, fileTask)
+			if err != nil {
+				continue
+			}
+			fe := &db.FileEntry{
+				TaskID:     ftID,
+				SourceFile: f.SourceFile,
+				Streams:    f.Streams,
+				Selected:   true,
+				OutputFile: input.OutputPath + "/" + fileName + ".mkv",
+			}
+			db.CreateFileEntry(s.DB, fe)
+
+			cfg, err := db.GetConfig(s.DB, input.ConfigID)
+			if err != nil || cfg == nil || cfg.ID == 0 {
+				cfg = &db.TranscodeConfig{
+					ID:           0,
+					VideoEncoder: "x264",
+					VideoParams:  `{"crf": 23, "preset": "fast"}`,
+				}
+			}
+			fileTask.ID = ftID
+			s.Runner.Start(fileTask, []db.FileEntry{*fe}, cfg)
+			created = append(created, *fileTask)
+		}
+		if len(created) > 0 {
+			writeJSON(w, http.StatusCreated, created)
+			return
+		}
+		writeError(w, http.StatusBadRequest, "no files selected")
 		return
 	}
-
-	for _, f := range input.Files {
-		fe := &db.FileEntry{
-			TaskID:     taskID,
-			SourceFile: f.SourceFile,
-			Streams:    f.Streams,
-			Selected:   f.Selected,
-			OutputFile: input.OutputPath + "/" + filepath.Base(f.SourceFile) + ".mkv",
-		}
-		db.CreateFileEntry(s.DB, fe)
-	}
-
-	if s.Runner != nil {
-		task.ID = taskID
-		files, _ := db.ListFileEntries(s.DB, taskID)
-		cfg, _ := db.GetConfig(s.DB, input.ConfigID)
-		s.Runner.Start(task, files, cfg)
-	}
-
-	task.ID = taskID
-	writeJSON(w, http.StatusCreated, task)
 }
 
 func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
@@ -118,11 +132,22 @@ func (s *Server) handleDeleteCompleted(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRetryTask(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	db.UpdateTask(s.DB, id, map[string]any{"status": "pending", "error_msg": ""})
-	task, _ := db.GetTask(s.DB, id)
+	task, err := db.GetTask(s.DB, id)
+	if err != nil || task == nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
 	files, _ := db.ListFileEntries(s.DB, id)
-	cfg, _ := db.GetConfig(s.DB, task.ConfigID)
+	cfg, err := db.GetConfig(s.DB, task.ConfigID)
+	if err != nil || cfg == nil {
+		writeError(w, http.StatusNotFound, "config not found")
+		return
+	}
 	if s.Runner != nil {
-		s.Runner.Start(task, files, cfg)
+		if err := s.Runner.Start(task, files, cfg); err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "retrying"})
 }

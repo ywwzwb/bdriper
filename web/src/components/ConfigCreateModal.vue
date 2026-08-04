@@ -268,7 +268,7 @@ import { ref, reactive, watch } from 'vue'
 import { api } from '@/api'
 
 const props = defineProps<{ visible: boolean; editConfig?: any }>()
-const emit = defineEmits<{ close: []; saved: [config: any]; error?: [msg: string] }>()
+const emit = defineEmits<{ close: []; saved: [config: any]; error: [msg: string] }>()
 
 const configStep = ref(0)
 const configMode = ref<'simple' | 'pro'>('simple')

@@ -28,7 +28,7 @@ export const api = {
 
   wizard: {
     parse: (path: string) => request<any>('/api/wizard/parse', { method: 'POST', body: JSON.stringify({ path }) }),
-    fileStreams: (path: string) => request<any>(`/api/wizard/file/${encodeURIComponent(path)}/streams`),
+    fileStreams: (path: string) => request<any>(`/api/wizard/file/streams?path=${encodeURIComponent(path)}`),
   },
 
   configs: {

@@ -29,22 +29,22 @@
             </div>
             <div style="font-size:13px;color:#8A8F98;">{{ task.source_path || task.file }}</div>
             <div v-if="task.status === 'running'" class="progress-track" style="margin-top:8px;">
-              <div class="progress-fill" :style="{width: task.progress + '%'}" />
+              <div class="progress-fill" :style="{width: Math.round(task.progress) + '%'}" />
             </div>
           </div>
-
           <div style="text-align:right;flex-shrink:0;">
-            <div v-if="task.status === 'running'" style="font-weight:600;font-size:15px;">{{ task.progress }}%</div>
-            <div v-if="task.status === 'running'" style="font-size:12px;color:#8A8F98;">剩余 {{ task.eta }}</div>
+            <div v-if="task.status === 'running'" style="font-weight:600;font-size:15px;">{{ task.progress.toFixed(1) }}%</div>
+            <div v-if="task.status === 'running'" style="font-size:12px;color:#8A8F98;">剩余 {{ formatETA(task.estimated_eta || task.eta) }}</div>
             <div v-if="task.status === 'completed'" style="font-size:13px;color:#8A8F98;">{{ task.size }}</div>
             <div v-if="task.status === 'failed'" style="font-size:12px;color:#EF4444;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ task.error_msg }}</div>
           </div>
 
           <div style="display:flex;gap:4px;flex-shrink:0;" @click.stop>
             <button v-if="task.status === 'running'" class="btn-ghost" @click="pauseTask(task)" style="padding:6px 12px;font-size:12px;">暂停</button>
+            <button v-if="task.status === 'paused'" class="btn-ghost" @click="resumeTask(task)" style="padding:6px 12px;font-size:12px;">恢复</button>
             <button v-if="task.status === 'running' || task.status === 'pending'" class="btn-ghost" @click="cancelTask(task)" style="padding:6px 12px;font-size:12px;color:#EF4444;">取消</button>
             <button v-if="task.status === 'failed'" class="btn-ghost" @click="retryTask(task)" style="padding:6px 12px;font-size:12px;">重试</button>
-            <button v-if="task.status === 'completed' || task.status === 'failed' || task.status === 'paused'" class="btn-ghost" @click="deleteTask(task)" style="padding:6px 12px;font-size:12px;color:#EF4444;">删除</button>
+            <button v-if="task.status === 'completed' || task.status === 'failed' || task.status === 'paused' || task.status === 'cancelled'" class="btn-ghost" @click="deleteTask(task)" style="padding:6px 12px;font-size:12px;color:#EF4444;">删除</button>
           </div>
         </div>
 
@@ -118,7 +118,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { PhFolder } from '@phosphor-icons/vue'
 import WizardModal from '../wizard/WizardModal.vue'
 import { api } from '@/api'
@@ -149,6 +149,23 @@ const canBatchPause = computed(() => {
   return selected.some(t => t.status === 'running' || t.status === 'pending')
 })
 
+function formatETA(eta: string | number): string {
+  if (!eta) return ''
+  const sec = typeof eta === 'string' ? parseInt(eta) || 0 : eta
+  if (sec <= 0) return ''
+  if (sec < 60) return '即将完成'
+  if (sec < 3600) return `${Math.floor(sec / 60)}分钟`
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  return `${h}小时${m}分钟`
+}
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
+
 onMounted(() => {
   fetchTasks()
   wsOn('progress', (data: any) => {
@@ -157,13 +174,17 @@ onMounted(() => {
       task.progress = data.progress * 100
     }
   })
+  // Poll every 3 seconds for status changes / new tasks
+  pollTimer = setInterval(fetchTasks, 3000)
 })
 
 watch(activeFilter, () => fetchTasks())
 
 async function fetchTasks() {
   try {
-    tasks.value = await api.tasks.list(activeFilter.value)
+    const data = await api.tasks.list(activeFilter.value)
+    const expandedIds = new Set(tasks.value.filter(t => t.expanded).map(t => t.id))
+    tasks.value = (data || []).map(t => ({ ...t, progress: (t.progress || 0) * 100, expanded: expandedIds.has(t.id) }))
   } catch {}
 }
 
@@ -178,6 +199,10 @@ function statusLabel(s: string) {
 
 async function pauseTask(task: any) {
   try { await api.tasks.update(task.id, { status: 'paused' }); fetchTasks() } catch {}
+}
+
+async function resumeTask(task: any) {
+  try { await api.tasks.update(task.id, { status: 'pending' }); fetchTasks() } catch {}
 }
 async function cancelTask(task: any) {
   try { await api.tasks.update(task.id, { status: 'cancelled' }); fetchTasks() } catch {}
@@ -202,7 +227,19 @@ async function batchPause() {
 async function viewConfig(name: string) {
   try {
     const configs = await api.configs.list()
-    configDetail.value = configs.find((c: any) => c.name === name) || null
+    const cfg = configs.find((c: any) => c.name === name)
+    if (cfg) {
+      configDetail.value = {
+        name: cfg.name,
+        encoder: cfg.video_encoder || cfg.encoder,
+        mode: cfg.encoder_type || cfg.mode || 'cpu',
+        isPreset: cfg.is_builtin || false,
+        params: typeof cfg.video_params === 'string' ? JSON.parse(cfg.video_params) : (cfg.video_params || {}),
+        audio: typeof cfg.audio_tracks === 'string' ? JSON.parse(cfg.audio_tracks) : (cfg.audio_tracks || {}),
+      }
+    } else {
+      configDetail.value = null
+    }
   } catch {}
 }
 </script>

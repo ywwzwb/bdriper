@@ -70,7 +70,14 @@ func ParseBDMV(sourcePath string) (*BDMVInfo, error) {
 			f := filepath.Join(streamDir, e.Name())
 			bf, err := probeM2TS(f)
 			if err != nil {
-				continue
+				// Fallback: ffprobe not available — just list file with basic info
+				info2, _ := e.Info()
+				bf = &BDMVFile{
+					Path:       f,
+					Duration:   fmt.Sprintf("%.0f MB", float64(info2.Size())/(1024*1024)),
+					Resolution: "?",
+					IsMain:     info2.Size() > 50*1024*1024, // >50MB = likely main content
+				}
 			}
 			info.Files = append(info.Files, *bf)
 		}
@@ -182,13 +189,33 @@ func GetFileStreams(m2tsPath string) (*FileStreamInfo, error) {
 	}
 	json.Unmarshal(out, &probe)
 
+	// Try to enrich with language info from CLIPINF
+	langMap := parseClipinfLanguages(m2tsPath)
+
 	result := &FileStreamInfo{}
+	audioIdx := 0
+	subIdx := 0
 	for _, s := range probe.Streams {
+		lang := s.Tags.Language
+		if lang == "" {
+			switch s.CodecType {
+			case "audio":
+				if l, ok := langMap[fmt.Sprintf("audio_%d", audioIdx)]; ok {
+					lang = l
+				}
+				audioIdx++
+			case "subtitle":
+				if l, ok := langMap[fmt.Sprintf("subtitle_%d", subIdx)]; ok {
+					lang = l
+				}
+				subIdx++
+			}
+		}
 		stream := Stream{
 			Index:      s.Index,
 			Codec:      s.CodecName,
 			Type:       s.CodecType,
-			Language:   s.Tags.Language,
+			Language:   lang,
 			Channels:   s.Channels,
 			SampleRate: s.SampleRate,
 		}
@@ -202,6 +229,81 @@ func GetFileStreams(m2tsPath string) (*FileStreamInfo, error) {
 		}
 	}
 	return result, nil
+}
+
+func parseClipinfLanguages(m2tsPath string) map[string]string {
+	m2tsName := filepath.Base(m2tsPath)
+	baseName := strings.TrimSuffix(m2tsName, filepath.Ext(m2tsName))
+	clpiPath := filepath.Join(filepath.Dir(filepath.Dir(m2tsPath)), "CLIPINF", baseName+".clpi")
+
+	data, err := os.ReadFile(clpiPath)
+	if err != nil {
+		return nil
+	}
+
+	result := make(map[string]string)
+	audioCount := 0
+	subCount := 0
+
+	// Scan for stream entry pattern:
+	//   4 bytes: 0x00000000 (delimiter)
+	//   1 byte:  length (0x11-0x12)
+	//   1 byte:  stream_index
+	//   1 byte:  0x15
+	//   1 byte:  stream_coding_type (0x80-0x86 audio, 0x90/0x92 subtitle)
+	//   For audio: 1 byte format + 3 bytes language
+	//   For subtitle: 3 bytes language
+	for i := 0; i < len(data)-10; i++ {
+		if data[i] != 0x00 || data[i+1] != 0x00 || data[i+2] != 0x00 || data[i+3] != 0x00 {
+			continue
+		}
+		entryLen := int(data[i+4])
+		if entryLen < 5 || entryLen > 30 {
+			continue
+		}
+		if data[i+6] != 0x15 {
+			continue
+		}
+		codingType := data[i+7]
+		isAudio := codingType >= 0x80 && codingType <= 0x86
+		isSub := codingType == 0x90 || codingType == 0x92
+		if !isAudio && !isSub {
+			continue
+		}
+
+		var lang string
+		if isAudio && i+11 < len(data) {
+			lang = strings.ToLower(string(data[i+9 : i+12]))
+		} else if isSub && i+11 < len(data) {
+			lang = strings.ToLower(string(data[i+8 : i+11]))
+		}
+		if !isValidLang(lang) {
+			continue
+		}
+
+		if isAudio {
+			result[fmt.Sprintf("audio_%d", audioCount)] = lang
+			audioCount++
+		} else {
+			result[fmt.Sprintf("subtitle_%d", subCount)] = lang
+			subCount++
+		}
+
+		i += entryLen
+	}
+	return result
+}
+
+func isValidLang(s string) bool {
+	if len(s) != 3 {
+		return false
+	}
+	for _, c := range s {
+		if c < 'a' || c > 'z' {
+			return false
+		}
+	}
+	return true
 }
 
 func parseFPS(rate string) float64 {

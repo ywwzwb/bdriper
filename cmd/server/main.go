@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -40,12 +41,16 @@ func main() {
 		os.Exit(1)
 	}
 	logger := slog.New(logHandler)
+	slog.SetDefault(logger)
 
 	taskHub := api.NewHub()
 
 	maxConcurrent := getEnvInt("MAX_CONCURRENT", 2)
 	hubAdapter := &taskHubAdapter{hub: taskHub}
 	runner := task.NewRunner(database, logger, hubAdapter, maxConcurrent)
+
+	// Mark orphaned running tasks as failed on startup
+	db.RecoverOrphanedTasks(database, logger)
 
 	presetsDir := os.Getenv("BDRI_PER_PRESETS_DIR")
 	if presetsDir == "" {
@@ -54,6 +59,7 @@ func main() {
 	config.LoadPresets(database, presetsDir)
 
 	preview.StartCleanup(database, 30*time.Minute)
+	api.StartCPUPoller(5 * time.Second)
 
 	spaFS := http.Dir(getEnv("WEB_DIST", "web/dist"))
 
@@ -95,6 +101,8 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 	logger.Info("shutting down")
+	server.Shutdown(context.TODO())
+	database.Close()
 }
 
 func getEnv(key, def string) string {

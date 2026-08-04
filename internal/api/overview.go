@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -16,37 +15,32 @@ import (
 )
 
 var (
-	lastCPUPercent  float64
-	cpuPollMutex    sync.Mutex
-	cpuPolling      bool
+	lastCPUPercent float64
+	cpuPollMutex   sync.Mutex
 )
 
 func pollCPU() {
-	cpuPollMutex.Lock()
-	if cpuPolling {
-		cpuPollMutex.Unlock()
-		return
-	}
-	cpuPolling = true
-	cpuPollMutex.Unlock()
-
 	p, err := cpu.Percent(1*time.Second, false)
 	if err == nil && len(p) > 0 {
 		cpuPollMutex.Lock()
 		lastCPUPercent = p[0]
 		cpuPollMutex.Unlock()
 	}
+}
 
-	cpuPollMutex.Lock()
-	cpuPolling = false
-	cpuPollMutex.Unlock()
+func StartCPUPoller(interval time.Duration) {
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for range t.C {
+			pollCPU()
+		}
+	}()
 }
 
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
-
-	go pollCPU()
 
 	tasks, _ := db.ListTasks(s.DB, "")
 	var running, total int
@@ -96,5 +90,3 @@ func execCmdOutput(name string, args ...string) (string, error) {
 	out, err := cmd.Output()
 	return string(out), err
 }
-
-var _ = os.Stat

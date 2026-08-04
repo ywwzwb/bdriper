@@ -17,13 +17,18 @@ type Event struct {
 	Data json.RawMessage `json:"data"`
 }
 
+type wsClient struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
 type Hub struct {
 	mu      sync.RWMutex
-	clients map[*websocket.Conn]bool
+	clients map[*wsClient]bool
 }
 
 func NewHub() *Hub {
-	return &Hub{clients: make(map[*websocket.Conn]bool)}
+	return &Hub{clients: make(map[*wsClient]bool)}
 }
 
 func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
@@ -31,13 +36,14 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	c := &wsClient{conn: conn}
 	h.mu.Lock()
-	h.clients[conn] = true
+	h.clients[c] = true
 	h.mu.Unlock()
 	go func() {
 		defer func() {
 			h.mu.Lock()
-			delete(h.clients, conn)
+			delete(h.clients, c)
 			h.mu.Unlock()
 			conn.Close()
 		}()
@@ -53,7 +59,9 @@ func (h *Hub) Broadcast(evt Event) {
 	data, _ := json.Marshal(evt)
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	for conn := range h.clients {
-		conn.WriteMessage(websocket.TextMessage, data)
+	for c := range h.clients {
+		c.mu.Lock()
+		c.conn.WriteMessage(websocket.TextMessage, data)
+		c.mu.Unlock()
 	}
 }

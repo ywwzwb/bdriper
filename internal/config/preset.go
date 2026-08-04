@@ -41,7 +41,15 @@ func ListPresets(database *sql.DB) ([]db.PresetTemplate, error) {
 		var p db.PresetTemplate
 		var data string
 		rows.Scan(&p.Name, &p.Encoder, &p.Mode, &data, &p.Description, &p.Builtin)
-		json.Unmarshal([]byte(data), &p.Params)
+		// Extract inner params from preset JSON wrapper
+		var wrapper struct {
+			Params map[string]any `json:"params"`
+		}
+		if err := json.Unmarshal([]byte(data), &wrapper); err == nil && wrapper.Params != nil {
+			p.Params = wrapper.Params
+		} else {
+			json.Unmarshal([]byte(data), &p.Params)
+		}
 		presets = append(presets, p)
 	}
 	return presets, nil

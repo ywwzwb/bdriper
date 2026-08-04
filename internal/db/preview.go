@@ -13,13 +13,14 @@ type PreviewJob struct {
 	Duration   int       `json:"duration"`
 	OutputFile string    `json:"output_file"`
 	Status     string    `json:"status"`
+	Progress   float64   `json:"progress"`
 	ExpiresAt  time.Time `json:"expires_at"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
 func CreatePreview(db *sql.DB, p *PreviewJob) (int64, error) {
-	res, err := db.Exec(`INSERT INTO preview_jobs (task_id, source_file, start_time, duration, output_file, status, expires_at) VALUES (?,?,?,?,?,?,?)`,
-		p.TaskID, p.SourceFile, p.StartTime, p.Duration, p.OutputFile, p.Status, p.ExpiresAt)
+	res, err := db.Exec(`INSERT INTO preview_jobs (task_id, source_file, start_time, duration, output_file, status, progress, expires_at) VALUES (?,?,?,?,?,?,?,?)`,
+		p.TaskID, p.SourceFile, p.StartTime, p.Duration, p.OutputFile, p.Status, p.Progress, p.ExpiresAt)
 	if err != nil {
 		return 0, err
 	}
@@ -28,8 +29,8 @@ func CreatePreview(db *sql.DB, p *PreviewJob) (int64, error) {
 
 func GetPreview(db *sql.DB, id int64) (*PreviewJob, error) {
 	p := &PreviewJob{}
-	err := db.QueryRow(`SELECT id,task_id,source_file,start_time,duration,output_file,status,expires_at,created_at FROM preview_jobs WHERE id=?`, id).
-		Scan(&p.ID, &p.TaskID, &p.SourceFile, &p.StartTime, &p.Duration, &p.OutputFile, &p.Status, &p.ExpiresAt, &p.CreatedAt)
+	err := db.QueryRow(`SELECT id,task_id,source_file,start_time,duration,output_file,status,progress,expires_at,created_at FROM preview_jobs WHERE id=?`, id).
+		Scan(&p.ID, &p.TaskID, &p.SourceFile, &p.StartTime, &p.Duration, &p.OutputFile, &p.Status, &p.Progress, &p.ExpiresAt, &p.CreatedAt)
 	return p, err
 }
 

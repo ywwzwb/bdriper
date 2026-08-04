@@ -22,6 +22,12 @@ func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
 
 	path = filepath.Clean(path)
 
+	allowedRoots := []string{s.DataDir, "/mnt", "/media", "/tmp"}
+	if !isPathAllowed(path, allowedRoots) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "cannot read directory: "+err.Error())
@@ -29,7 +35,7 @@ func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parent := filepath.Dir(path)
-	if parent == path {
+	if parent == path || !isPathAllowed(parent, allowedRoots) {
 		parent = ""
 	}
 
@@ -61,4 +67,14 @@ func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
 		"parent":  parent,
 		"entries": result,
 	})
+}
+
+func isPathAllowed(path string, allowedRoots []string) bool {
+	for _, root := range allowedRoots {
+		rel, err := filepath.Rel(root, path)
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			return true
+		}
+	}
+	return false
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/zwb/bdriper/internal/log"
 	"github.com/zwb/bdriper/internal/task"
@@ -42,7 +43,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/fs/list", s.handleFSList)
 
 	mux.HandleFunc("POST /api/wizard/parse", s.handleParseBDMV)
-	mux.HandleFunc("GET /api/wizard/file/{path}/streams", s.handleFileStreams)
+	mux.HandleFunc("GET /api/wizard/file/streams", s.handleFileStreams)
 
 	mux.HandleFunc("GET /api/configs", s.handleListConfigs)
 	mux.HandleFunc("POST /api/configs", s.handleCreateConfig)
@@ -69,7 +70,19 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/help", s.handleHelpDoc)
 
 	if s.SPAFS != nil {
-		mux.Handle("/", http.FileServer(s.SPAFS))
+		fs := http.FileServer(s.SPAFS)
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/" || r.URL.Path == "/favicon.ico" || len(r.URL.Path) > 8 && r.URL.Path[:8] == "/assets/" {
+				fs.ServeHTTP(w, r)
+				return
+			}
+			if !strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/ws/") {
+				r.URL.Path = "/"
+				fs.ServeHTTP(w, r)
+			} else {
+				http.NotFound(w, r)
+			}
+		})
 	}
 }
 
