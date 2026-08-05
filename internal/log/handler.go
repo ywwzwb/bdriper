@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 )
@@ -121,7 +122,7 @@ func NewLogger(dataDir, level string, maxFiles int, maxSizeMB int64) (*MultiHand
 	default:
 		l = slog.LevelInfo
 	}
-	bh := NewBroadcastHandler(w, l)
+	bh := NewBroadcastHandler(io.MultiWriter(w, os.Stdout), l)
 	return &MultiHandler{BroadcastHandler: bh, writer: w}, nil
 }
 

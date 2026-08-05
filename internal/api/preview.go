@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -48,6 +49,7 @@ func (s *Server) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 
 	id, err := db.CreatePreview(s.DB, pj)
 	if err != nil {
+		slog.Error("failed to create preview", "error", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -55,6 +57,7 @@ func (s *Server) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		cmd, progressCh, err := preview.RunPreview(pj.SourceFile, pj.StartTime, input.Encoder, input.VideoParams, pj.Duration, pj.OutputFile)
 		if err != nil {
+			slog.Error("preview run failed", "preview_id", id, "error", err)
 			db.UpdatePreview(s.DB, id, map[string]any{"status": "failed"})
 			return
 		}
@@ -63,6 +66,7 @@ func (s *Server) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 		}
 		cmd.Wait()
 		db.UpdatePreview(s.DB, id, map[string]any{"status": "completed", "progress": 1.0})
+		slog.Info("preview completed", "preview_id", id)
 	}()
 
 	pj.ID = id
@@ -73,6 +77,7 @@ func (s *Server) handlePreviewStatus(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	p, err := db.GetPreview(s.DB, id)
 	if err != nil {
+		slog.Warn("preview not found", "id", id, "error", err)
 		writeError(w, http.StatusNotFound, "preview not found")
 		return
 	}
@@ -83,6 +88,7 @@ func (s *Server) handlePreviewDownload(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	p, err := db.GetPreview(s.DB, id)
 	if err != nil {
+		slog.Warn("preview not found", "id", id, "error", err)
 		writeError(w, http.StatusNotFound, "preview not found")
 		return
 	}
@@ -95,10 +101,13 @@ func (s *Server) handleDeletePreview(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	p, err := db.GetPreview(s.DB, id)
 	if err != nil {
+		slog.Warn("preview not found", "id", id, "error", err)
 		writeError(w, http.StatusNotFound, "preview not found")
 		return
 	}
-	os.Remove(p.OutputFile)
+	if err := os.Remove(p.OutputFile); err != nil {
+		slog.Warn("failed to remove preview file", "file", p.OutputFile, "error", err)
+	}
 	db.DeletePreview(s.DB, id)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

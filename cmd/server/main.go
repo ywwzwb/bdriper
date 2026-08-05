@@ -35,13 +35,14 @@ func main() {
 		panic("failed to open database: " + err.Error())
 	}
 
-	logHandler, err := log.NewLogger(filepath.Join(dataDir, "logs"), "info", 5, 10)
+	logHandler, err := log.NewLogger(filepath.Join(dataDir, "logs"), "debug", 5, 10)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
 		os.Exit(1)
 	}
 	logger := slog.New(logHandler)
 	slog.SetDefault(logger)
+	logger.Info("data dir", "path", dataDir)
 
 	taskHub := api.NewHub()
 
@@ -56,7 +57,9 @@ func main() {
 	if presetsDir == "" {
 		presetsDir = getEnv("PRESETS_DIR", "presets")
 	}
-	config.LoadPresets(database, presetsDir)
+	if err := config.LoadPresets(database, presetsDir); err != nil {
+		logger.Warn("failed to load presets", "dir", presetsDir, "error", err)
+	}
 
 	preview.StartCleanup(database, 30*time.Minute)
 	api.StartCPUPoller(5 * time.Second)
@@ -101,8 +104,12 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 	logger.Info("shutting down")
-	server.Shutdown(context.TODO())
-	database.Close()
+	if err := server.Shutdown(context.Background()); err != nil {
+		logger.Error("server shutdown error", "err", err)
+	}
+	if err := database.Close(); err != nil {
+		logger.Error("database close error", "err", err)
+	}
 }
 
 func getEnv(key, def string) string {
@@ -150,7 +157,7 @@ func withMiddleware(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		slog.Info("request", "method", r.Method, "path", r.URL.Path)
+		slog.Debug("request", "method", r.Method, "path", r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
 }

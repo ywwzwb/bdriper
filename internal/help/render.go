@@ -3,6 +3,7 @@ package help
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -67,6 +68,7 @@ func RenderFile(path string) ([]byte, error) {
 
 	source, err := os.ReadFile(path)
 	if err != nil {
+		slog.Debug("help file not found", "path", path, "error", err)
 		return nil, err
 	}
 	return Render(name, source), nil

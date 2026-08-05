@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -13,6 +14,7 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	tasks, err := db.ListTasks(s.DB, status)
 	if err != nil {
+		slog.Error("failed to list tasks", "error", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -51,21 +53,25 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 				OutputPath: input.OutputPath,
 				ConfigID:   input.ConfigID,
 			}
-			ftID, err := db.CreateTask(s.DB, fileTask)
-			if err != nil {
-				continue
-			}
-			fe := &db.FileEntry{
-				TaskID:     ftID,
-				SourceFile: f.SourceFile,
-				Streams:    f.Streams,
-				Selected:   true,
-				OutputFile: input.OutputPath + "/" + fileName + ".mkv",
-			}
-			db.CreateFileEntry(s.DB, fe)
+		ftID, err := db.CreateTask(s.DB, fileTask)
+		if err != nil {
+			slog.Error("failed to create task", "name", fileTask.Name, "error", err)
+			continue
+		}
+		fe := &db.FileEntry{
+			TaskID:     ftID,
+			SourceFile: f.SourceFile,
+			Streams:    f.Streams,
+			Selected:   true,
+			OutputFile: input.OutputPath + "/" + fileName + ".mkv",
+		}
+		if _, err := db.CreateFileEntry(s.DB, fe); err != nil {
+			slog.Warn("failed to create file entry", "task_id", ftID, "error", err)
+		}
 
-			cfg, err := db.GetConfig(s.DB, input.ConfigID)
-			if err != nil || cfg == nil || cfg.ID == 0 {
+		cfg, err := db.GetConfig(s.DB, input.ConfigID)
+		if err != nil || cfg == nil || cfg.ID == 0 {
+			slog.Warn("config not found, using defaults", "config_id", input.ConfigID, "error", err)
 				cfg = &db.TranscodeConfig{
 					ID:           0,
 					VideoEncoder: "x264",
@@ -89,10 +95,14 @@ func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	task, err := db.GetTask(s.DB, id)
 	if err != nil {
+		slog.Warn("task not found", "id", id, "error", err)
 		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
-	files, _ := db.ListFileEntries(s.DB, id)
+	files, err := db.ListFileEntries(s.DB, id)
+	if err != nil {
+		slog.Warn("failed to list file entries", "task_id", id, "error", err)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"task": task, "files": files})
 }
 
@@ -112,6 +122,7 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db.UpdateTask(s.DB, id, map[string]any{"status": input.Status})
+	slog.Info("task status updated", "id", id, "status", input.Status)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
@@ -134,12 +145,17 @@ func (s *Server) handleRetryTask(w http.ResponseWriter, r *http.Request) {
 	db.UpdateTask(s.DB, id, map[string]any{"status": "pending", "error_msg": ""})
 	task, err := db.GetTask(s.DB, id)
 	if err != nil || task == nil {
+		slog.Warn("retry task not found", "id", id, "error", err)
 		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
-	files, _ := db.ListFileEntries(s.DB, id)
+	files, err := db.ListFileEntries(s.DB, id)
+	if err != nil {
+		slog.Warn("failed to list file entries for retry", "task_id", id, "error", err)
+	}
 	cfg, err := db.GetConfig(s.DB, task.ConfigID)
 	if err != nil || cfg == nil {
+		slog.Warn("retry config not found", "config_id", task.ConfigID, "error", err)
 		writeError(w, http.StatusNotFound, "config not found")
 		return
 	}
@@ -162,6 +178,7 @@ func (s *Server) handleBatchTasks(w http.ResponseWriter, r *http.Request) {
 	switch input.Action {
 	case "delete":
 		db.BatchDelete(s.DB, input.IDs)
+		slog.Info("batch tasks deleted", "count", len(input.IDs))
 	case "pause":
 		for _, id := range input.IDs {
 			if s.Runner != nil {
@@ -169,6 +186,7 @@ func (s *Server) handleBatchTasks(w http.ResponseWriter, r *http.Request) {
 			}
 			db.UpdateTask(s.DB, id, map[string]any{"status": "paused"})
 		}
+		slog.Info("batch tasks paused", "count", len(input.IDs))
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,6 +31,7 @@ func (s *Server) handleFSList(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
+		slog.Warn("cannot read directory", "path", path, "error", err)
 		writeError(w, http.StatusNotFound, "cannot read directory: "+err.Error())
 		return
 	}

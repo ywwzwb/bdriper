@@ -3,6 +3,7 @@ package preview
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -52,6 +53,7 @@ func RunPreview(sourceFile, startTime, encoder string, videoParams map[string]an
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
+		slog.Error("preview stderr pipe failed", "error", err)
 		return nil, nil, err
 	}
 

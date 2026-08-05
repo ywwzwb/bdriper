@@ -108,6 +108,7 @@ func (r *Runner) run(task *db.Task, files []db.FileEntry, cfg *db.TranscodeConfi
 				"-of", "default=nokey=1:noprint_wrappers=1",
 				file.SourceFile).Output()
 			if err != nil {
+				r.Logger.Warn("ffprobe frame count failed", "task", task.ID, "file", filepath.Base(file.SourceFile), "error", err)
 				return 0
 			}
 			parts := strings.Fields(strings.TrimSpace(string(out)))
@@ -249,7 +250,8 @@ func (r *Runner) run(task *db.Task, files []db.FileEntry, cfg *db.TranscodeConfi
 			return
 		}
 		os.Remove(videoFile)
-		r.Logger.Info("file completed", "task", task.ID, "file", filepath.Base(file.SourceFile), "output", videoFile)
+		outputFile := filepath.Join(task.OutputPath, fmt.Sprintf("%s_t%d%s.mkv", baseName[:len(baseName)-len(ext)], task.ID, ext))
+		r.Logger.Info("file completed", "task", task.ID, "file", filepath.Base(file.SourceFile), "output", outputFile)
 	}
 
 	r.updateTaskStatus(task.ID, "completed")
@@ -270,7 +272,9 @@ func updateProgress(r *Runner, taskID int64, text string, encodeStart time.Time,
 		}
 	}
 	if pct > 0 {
-		db.UpdateTask(r.DB, taskID, map[string]any{"progress": pct / 100, "status": "running"})
+		if err := db.UpdateTask(r.DB, taskID, map[string]any{"progress": pct / 100, "status": "running"}); err != nil {
+			r.Logger.Warn("failed to update progress", "task", taskID, "error", err)
+		}
 		if r.Hub != nil {
 			r.Hub.BroadcastProgress(taskID, pct/100)
 		}
@@ -298,7 +302,10 @@ func (r *Runner) Pause(taskID int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if rt, ok := r.running[taskID]; ok {
-		return pauseProcess(rt.cmd)
+		if err := pauseProcess(rt.cmd); err != nil {
+			r.Logger.Warn("failed to pause process", "task", taskID, "error", err)
+		}
+		return nil
 	}
 	return nil
 }
@@ -311,17 +318,24 @@ func (r *Runner) Cancel(taskID int64) error {
 	}
 	r.mu.Unlock()
 	if ok {
-		return cancelProcess(rt.cmd)
+		if err := cancelProcess(rt.cmd); err != nil {
+			r.Logger.Warn("failed to cancel process", "task", taskID, "error", err)
+		}
+		return nil
 	}
 	return nil
 }
 
 func (r *Runner) updateTaskStatus(taskID int64, status string) {
-	db.UpdateTask(r.DB, taskID, map[string]any{"status": status})
+	if err := db.UpdateTask(r.DB, taskID, map[string]any{"status": status}); err != nil {
+		r.Logger.Error("failed to update task status", "task", taskID, "status", status, "error", err)
+	}
 }
 
 func (r *Runner) updateTaskPID(taskID int64, pid int) {
-	db.UpdateTask(r.DB, taskID, map[string]any{"pid": pid})
+	if err := db.UpdateTask(r.DB, taskID, map[string]any{"pid": pid}); err != nil {
+		r.Logger.Warn("failed to update task pid", "task", taskID, "pid", pid, "error", err)
+	}
 }
 
 func (r *Runner) failTask(taskID int64, errMsg string) {
@@ -350,7 +364,9 @@ func (r *Runner) cleanup(task *db.Task) {
 		if err == nil {
 			for _, e := range entries {
 				if strings.Contains(e.Name(), idSuffix) && strings.HasSuffix(e.Name(), "_video.265") {
-					os.Remove(filepath.Join(task.OutputPath, e.Name()))
+					if err := os.Remove(filepath.Join(task.OutputPath, e.Name())); err != nil {
+						r.Logger.Warn("failed to clean up temp file", "file", e.Name(), "error", err)
+					}
 				}
 			}
 		}

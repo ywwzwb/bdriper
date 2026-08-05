@@ -3,6 +3,7 @@ package config
 import (
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -12,6 +13,7 @@ import (
 func LoadPresets(database *sql.DB, presetsDir string) error {
 	entries, err := os.ReadDir(presetsDir)
 	if err != nil {
+		slog.Warn("failed to read presets directory", "dir", presetsDir, "error", err)
 		return err
 	}
 	for _, e := range entries {
@@ -20,6 +22,7 @@ func LoadPresets(database *sql.DB, presetsDir string) error {
 		}
 		data, err := os.ReadFile(filepath.Join(presetsDir, e.Name()))
 		if err != nil {
+			slog.Warn("failed to read preset file", "file", e.Name(), "error", err)
 			continue
 		}
 		var p db.PresetTemplate
@@ -27,6 +30,7 @@ func LoadPresets(database *sql.DB, presetsDir string) error {
 		database.Exec(`INSERT OR IGNORE INTO preset_templates (name,encoder,mode,params,description,builtin) VALUES (?,?,?,?,?,1)`,
 			p.Name, p.Encoder, p.Mode, string(data), p.Description)
 	}
+	slog.Info("presets loaded", "dir", presetsDir, "count", len(entries))
 	return nil
 }
 

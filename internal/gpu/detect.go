@@ -3,6 +3,7 @@ package gpu
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +46,7 @@ func detectNVIDIA() *GPUInfo {
 	cmd := exec.Command("nvidia-smi", "--query-gpu=name", "--format=csv,noheader")
 	out, err := cmd.Output()
 	if err != nil {
+		slog.Debug("nvidia-smi query failed", "error", err)
 		return nil
 	}
 
@@ -94,6 +96,7 @@ func detectAMD() *GPUInfo {
 
 	cmd := exec.Command("vainfo")
 	if err := cmd.Run(); err != nil {
+		slog.Debug("vainfo check failed", "error", err)
 		return nil
 	}
 
@@ -118,6 +121,7 @@ func detectFFmpegEncoders(pattern string, codecNames []string) []EncoderInfo {
 	if err != nil {
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {
+			slog.Debug("ffmpeg encoder list failed", "error", err)
 			return nil
 		}
 	}

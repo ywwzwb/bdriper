@@ -25,6 +25,7 @@ type Server struct {
 }
 
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
+	slog.Info("registering routes")
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})

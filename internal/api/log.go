@@ -3,6 +3,7 @@ package api
 import (
 	"archive/tar"
 	"compress/gzip"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ func (s *Server) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 	for _, f := range files {
 		data, err := os.ReadFile(f)
 		if err != nil {
+			slog.Warn("failed to read log file", "file", f, "error", err)
 			continue
 		}
 		for _, line := range strings.Split(string(data), "\n") {
@@ -50,6 +52,7 @@ func (s *Server) handleDownloadLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
+			slog.Warn("failed to read log file for download", "file", path, "error", err)
 			return nil
 		}
 		hdr := &tar.Header{
@@ -71,6 +74,7 @@ func (s *Server) handleWSLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		slog.Warn("log websocket upgrade failed", "error", err)
 		return
 	}
 	defer conn.Close()
@@ -81,6 +85,7 @@ func (s *Server) handleWSLogs(w http.ResponseWriter, r *http.Request) {
 	for entry := range ch {
 		var e log.LogEntry = entry
 		if err := conn.WriteJSON(e); err != nil {
+			slog.Warn("log websocket write failed", "error", err)
 			return
 		}
 	}

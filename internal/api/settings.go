@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/zwb/bdriper/internal/db"
@@ -10,6 +11,7 @@ import (
 func (s *Server) handleListSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := db.ListSettings(s.DB)
 	if err != nil {
+		slog.Error("failed to list settings", "error", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -24,6 +26,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	for k, v := range input {
 		if err := db.SetSetting(s.DB, k, v); err != nil {
+			slog.Error("failed to set setting", "key", k, "error", err)
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

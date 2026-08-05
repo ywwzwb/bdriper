@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"os/exec"
@@ -123,11 +124,12 @@ func probeM2TS(path string) (*BDMVFile, error) {
 	)
 	out, err := cmd.Output()
 	if err != nil {
+		slog.Debug("ffprobe probe failed, using fallback", "file", path, "error", err)
 		return nil, err
 	}
 
 	var probe struct {
-		Streams []struct {
+		Streams  []struct {
 			CodecType  string `json:"codec_type"`
 			Width      int    `json:"width"`
 			Height     int    `json:"height"`
@@ -172,6 +174,7 @@ func GetFileStreams(m2tsPath string) (*FileStreamInfo, error) {
 	)
 	out, err := cmd.Output()
 	if err != nil {
+		slog.Debug("ffprobe stream detection failed", "file", m2tsPath, "error", err)
 		return nil, err
 	}
 

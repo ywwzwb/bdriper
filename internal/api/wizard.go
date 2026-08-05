@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/zwb/bdriper/internal/wizard"
@@ -24,6 +25,7 @@ func (s *Server) handleParseBDMV(w http.ResponseWriter, r *http.Request) {
 
 	info, err := wizard.ParseBDMV(srcPath)
 	if err != nil {
+		slog.Error("bdmv parse failed", "path", srcPath, "error", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -34,6 +36,7 @@ func (s *Server) handleFileStreams(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("path")
 	streams, err := wizard.GetFileStreams(filePath)
 	if err != nil {
+		slog.Error("file streams probe failed", "path", filePath, "error", err)
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

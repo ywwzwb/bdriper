@@ -95,9 +95,14 @@ func DeleteTask(db *sql.DB, id int64) error {
 }
 
 func BatchDelete(db *sql.DB, ids []int64) error {
-	tx, _ := db.Begin()
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
 	for _, id := range ids {
-		tx.Exec("UPDATE tasks SET deleted=1, updated_at=CURRENT_TIMESTAMP WHERE id=?", id)
+		if _, err := tx.Exec("UPDATE tasks SET deleted=1, updated_at=CURRENT_TIMESTAMP WHERE id=?", id); err != nil {
+			slog.Warn("batch delete failed for task", "id", id, "error", err)
+		}
 	}
 	return tx.Commit()
 }
@@ -152,7 +157,11 @@ func RecoverOrphanedTasks(db *sql.DB, logger *slog.Logger) {
 		logger.Error("failed to recover orphaned tasks", "error", err)
 		return
 	}
-	n, _ := result.RowsAffected()
+	n, err := result.RowsAffected()
+	if err != nil {
+		logger.Warn("failed to get orphaned task count", "error", err)
+		return
+	}
 	if n > 0 {
 		logger.Info("orphaned tasks marked as failed", "count", n)
 	}

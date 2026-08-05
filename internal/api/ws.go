@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"sync"
 
@@ -34,18 +35,23 @@ func NewHub() *Hub {
 func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		slog.Warn("websocket upgrade failed", "error", err)
 		return
 	}
 	c := &wsClient{conn: conn}
 	h.mu.Lock()
 	h.clients[c] = true
+	clientCount := len(h.clients)
 	h.mu.Unlock()
+	slog.Info("websocket client connected", "total", clientCount)
 	go func() {
 		defer func() {
 			h.mu.Lock()
 			delete(h.clients, c)
+			remaining := len(h.clients)
 			h.mu.Unlock()
 			conn.Close()
+			slog.Info("websocket client disconnected", "total", remaining)
 		}()
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
@@ -61,7 +67,9 @@ func (h *Hub) Broadcast(evt Event) {
 	defer h.mu.RUnlock()
 	for c := range h.clients {
 		c.mu.Lock()
-		c.conn.WriteMessage(websocket.TextMessage, data)
+		if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			slog.Warn("websocket write failed", "error", err)
+		}
 		c.mu.Unlock()
 	}
 }
