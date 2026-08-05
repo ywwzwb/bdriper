@@ -4,3 +4,4 @@ node_modules/
 *.md
 downloads/
 docs/
+!docs/help/
