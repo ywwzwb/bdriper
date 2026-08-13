@@ -157,12 +157,16 @@ func (r *Runner) run(task *db.Task, files []db.FileEntry, cfg *db.TranscodeConfi
 			r.failTask(task.ID, "encoder start failed: "+err.Error())
 			return
 		}
-		// Close parent's pipe fds — children hold their own copies
-		if pw, ok := ffmpegCmd.Stdout.(*os.File); ok && pw != nil {
-			pw.Close()
-		}
-		if pr, ok := videoCmd.Stdin.(*os.File); ok && pr != nil {
-			pr.Close()
+		// Close parent's pipe fds — children hold their own copies.
+		// ffmpegCmd is nil for hardware encoders (hevc_nvenc etc.), which do
+		// not use the intermediate yuv4mpegpipe.
+		if ffmpegCmd != nil {
+			if pw, ok := ffmpegCmd.Stdout.(*os.File); ok && pw != nil {
+				pw.Close()
+			}
+			if pr, ok := videoCmd.Stdin.(*os.File); ok && pr != nil {
+				pr.Close()
+			}
 		}
 
 		// Register the running task AFTER Start succeeds
