@@ -248,9 +248,15 @@ func (r *Runner) run(task *db.Task, files []db.FileEntry, cfg *db.TranscodeConfi
 		}
 
 		muxCmd := muxMKV(videoFile, task.OutputPath, file.SourceFile, task.ID)
+		var muxStderr bytes.Buffer
+		muxCmd.Stderr = &muxStderr
 		if err := muxCmd.Run(); err != nil {
-			r.Logger.Error("mux failed", "task", task.ID, "error", err)
-			r.failTask(task.ID, "muxing failed: "+err.Error())
+			msg := "muxing failed: " + err.Error()
+			if s := strings.TrimSpace(muxStderr.String()); s != "" {
+				msg += " stderr: " + s
+			}
+			r.Logger.Error("mux failed", "task", task.ID, "error", msg)
+			r.failTask(task.ID, msg)
 			return
 		}
 		os.Remove(videoFile)

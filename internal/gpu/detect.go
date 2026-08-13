@@ -135,10 +135,13 @@ func ffmpegEncoderWorks(pattern, codec string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	// Some encoders (e.g. NVENC HEVC) reject frames below a minimum dimension
+	// (typically 128x128 or 176x144). 320x240 is safely above all hardware
+	// encoder minimums while still encoding in a fraction of a second.
 	args := []string{
 		"-v", "error",
 		"-f", "lavfi",
-		"-i", "testsrc=duration=0.1:size=64x64:rate=5",
+		"-i", "testsrc=duration=0.1:size=320x240:rate=5",
 		"-frames:v", "1",
 		"-c:v", codec,
 		"-f", "null", "-",
