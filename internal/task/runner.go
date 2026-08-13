@@ -248,12 +248,18 @@ func (r *Runner) run(task *db.Task, files []db.FileEntry, cfg *db.TranscodeConfi
 		}
 
 		muxCmd := muxMKV(videoFile, task.OutputPath, file.SourceFile, task.ID)
-		var muxStderr bytes.Buffer
-		muxCmd.Stderr = &muxStderr
+		// mkvmerge writes error messages to stdout, not stderr.
+		var muxOut bytes.Buffer
+		var muxErr bytes.Buffer
+		muxCmd.Stdout = &muxOut
+		muxCmd.Stderr = &muxErr
 		if err := muxCmd.Run(); err != nil {
 			msg := "muxing failed: " + err.Error()
-			if s := strings.TrimSpace(muxStderr.String()); s != "" {
+			if s := strings.TrimSpace(muxErr.String()); s != "" {
 				msg += " stderr: " + s
+			}
+			if s := strings.TrimSpace(muxOut.String()); s != "" {
+				msg += " output: " + s
 			}
 			r.Logger.Error("mux failed", "task", task.ID, "error", msg)
 			r.failTask(task.ID, msg)
