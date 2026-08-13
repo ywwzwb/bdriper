@@ -14,6 +14,9 @@ services:
     restart: unless-stopped
 
   # GPU variant (uncomment if NVIDIA GPU available):
+  # NOTE: `video` capability is required for NVENC/NVDEC. Without it the
+  # nvidia-container-toolkit only injects `utility,compute` libraries and
+  # ffmpeg fails with "Cannot load libnvidia-encode.so.1".
   # bdriper-gpu:
   #   build: .
   #   ports:
@@ -28,5 +31,5 @@ services:
   #         devices:
   #           - driver: nvidia
   #             count: 1
-  #             capabilities: [gpu]
+  #             capabilities: [gpu, compute, utility, video]
   #   restart: unless-stopped

@@ -2,12 +2,13 @@ package gpu
 
 import (
 	"bytes"
-	"errors"
+	"context"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type EncoderInfo struct {
@@ -109,34 +110,53 @@ func detectAMD() *GPUInfo {
 }
 
 func detectFFmpegEncoders(pattern string, codecNames []string) []EncoderInfo {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		return nil
-	}
-
-	cmd := exec.Command("ffmpeg", "-hide_banner", "-encoders")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	out, err := cmd.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
-			slog.Debug("ffmpeg encoder list failed", "error", err)
-			return nil
-		}
-	}
-
 	var encoders []EncoderInfo
 	for _, name := range codecNames {
-		supported := strings.Contains(string(out), name)
 		encoders = append(encoders, EncoderInfo{
 			Name:      name,
 			Codec:     codecFromEncoder(name),
-			Supported: supported,
+			Supported: ffmpegEncoderWorks(pattern, name),
 		})
 	}
 
 	return encoders
+}
+
+// ffmpegEncoderWorks reports whether the given encoder can actually initialize
+// and encode. Merely grepping `ffmpeg -encoders` is not enough: the encoder
+// binary is compiled with support, but the runtime library (e.g.
+// libnvidia-encode.so.1 for NVENC) may be missing inside the container. A tiny
+// real encode is the only reliable check.
+func ffmpegEncoderWorks(pattern, codec string) bool {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	args := []string{
+		"-v", "error",
+		"-f", "lavfi",
+		"-i", "testsrc=duration=0.1:size=64x64:rate=5",
+		"-frames:v", "1",
+		"-c:v", codec,
+		"-f", "null", "-",
+	}
+
+	// QSV needs an explicit device, otherwise the encoder cannot initialize.
+	if pattern == "qsv" {
+		args = append([]string{"-init_hw_device", "qsv=hw"}, args...)
+	}
+
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		slog.Debug("ffmpeg encoder test failed", "codec", codec, "stderr", strings.TrimSpace(stderr.String()))
+		return false
+	}
+	return true
 }
 
 func codecFromEncoder(name string) string {

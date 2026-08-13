@@ -49,7 +49,7 @@
         <div v-if="gpuCards.length" class="glass" style="margin-top:12px;padding:16px;border:1px solid rgba(255,255,255,0.06);">
           <div style="font-weight:600;margin-bottom:8px;font-size:15px;">{{ gpuCards[0].vendor || gpuCards[0].name }}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <span v-for="enc in (gpuCards[0].encoders || [])" :key="enc.name" class="badge" :class="enc.available ? 'badge-completed' : 'badge-failed'">
+            <span v-for="enc in (gpuCards[0].encoders || [])" :key="enc.name" class="badge" :class="enc.supported ? 'badge-completed' : 'badge-failed'">
               {{ enc.name }}
             </span>
           </div>
