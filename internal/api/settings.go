@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -19,13 +20,13 @@ func (s *Server) handleListSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	var input map[string]string
+	var input map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	for k, v := range input {
-		if err := db.SetSetting(s.DB, k, v); err != nil {
+		if err := db.SetSetting(s.DB, k, fmt.Sprint(v)); err != nil {
 			slog.Error("failed to set setting", "key", k, "error", err)
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
