@@ -313,6 +313,9 @@ func parseProgressPct(text string, totalFrames int64) float64 {
 			}
 		}
 	}
+	if pct > 100 {
+		pct = 100
+	}
 	return pct
 }
 
