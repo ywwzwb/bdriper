@@ -8,6 +8,14 @@ import (
 	"path/filepath"
 )
 
+// utf8Env returns an environment slice with a UTF-8 locale forced. Without it
+// (e.g. POSIX/C locale, the default in minimal containers) mkvmerge v82 fails
+// to parse paths containing multi-byte UTF-8 characters (CJK etc.), truncating
+// them at the last ASCII path segment.
+func utf8Env() []string {
+	return append(os.Environ(), "LANG=C.UTF-8", "LC_ALL=C.UTF-8")
+}
+
 type PipelineConfig struct {
 	SourceFile      string
 	OutputDir       string
@@ -118,9 +126,11 @@ func muxMKV(videoFile string, outputDir string, sourceFile string, taskID int64)
 	ext := filepath.Ext(baseName)
 	output := filepath.Join(outputDir, fmt.Sprintf("%s_t%d%s.mkv", baseName[:len(baseName)-len(ext)], taskID, ext))
 	// Take video from encoded file, everything else from source
-	return exec.Command("/usr/bin/mkvmerge",
+	cmd := exec.Command("/usr/bin/mkvmerge",
 		"-o", output,
 		"--no-video", sourceFile,
 		videoFile,
 	)
+	cmd.Env = utf8Env()
+	return cmd
 }

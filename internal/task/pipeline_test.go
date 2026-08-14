@@ -56,3 +56,34 @@ func TestEncodeVideoX265ReturnsFFmpegAndEncoder(t *testing.T) {
 		t.Fatal("x265 path must return a non-nil encoder cmd")
 	}
 }
+
+func TestMuxMKVForcesUTF8Locale(t *testing.T) {
+	cmd := muxMKV(
+		"/mnt/动漫/[龙珠]/00002_t8.m2ts_video.265",
+		"/mnt/动漫/[龙珠]",
+		"/mnt/动漫/[龙珠]/DRAGON_BALL_01/BDMV/STREAM/00002.m2ts",
+		8,
+	)
+
+	if cmd.Env == nil {
+		t.Fatal("mux cmd must have explicit env")
+	}
+	env := map[string]string{}
+	for _, kv := range cmd.Env {
+		if i := indexByte(kv, '='); i >= 0 {
+			env[kv[:i]] = kv[i+1:]
+		}
+	}
+	if env["LANG"] != "C.UTF-8" || env["LC_ALL"] != "C.UTF-8" {
+		t.Fatalf("expected UTF-8 locale in env, got LANG=%q LC_ALL=%q", env["LANG"], env["LC_ALL"])
+	}
+}
+
+func indexByte(s string, b byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == b {
+			return i
+		}
+	}
+	return -1
+}

@@ -9,7 +9,9 @@ RUN apt-get update && apt-get install -y \
     mesa-va-drivers \
     ca-certificates \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    locales \
+    && rm -rf /var/lib/apt/lists/* \
+    && locale-gen en_US.UTF-8
 
 FROM golang:1.24-bookworm AS go-builder
 WORKDIR /src
@@ -36,5 +38,7 @@ ENV OUTPUT_DIR=/output
 ENV PRESETS_DIR=/app/presets
 ENV HELP_DIR=/app/docs/help
 ENV WEB_DIST=/app/web/dist
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 RUN mkdir -p /tmp/bdriper
 ENTRYPOINT ["bdriper"]
