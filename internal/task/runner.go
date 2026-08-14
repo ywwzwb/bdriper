@@ -276,18 +276,7 @@ func (r *Runner) run(task *db.Task, files []db.FileEntry, cfg *db.TranscodeConfi
 }
 
 func updateProgress(r *Runner, taskID int64, text string, encodeStart time.Time, totalFrames int64) {
-	var pct float64
-	lines := strings.Split(text, "\r")
-	for _, line := range lines {
-		if m := x265PercentRe.FindStringSubmatch(line); m != nil {
-			pct, _ = strconv.ParseFloat(m[1], 64)
-		} else if m := x264FrameRe.FindStringSubmatch(line); m != nil {
-			frames, _ := strconv.ParseInt(m[1], 10, 64)
-			if totalFrames > 0 {
-				pct = float64(frames) / float64(totalFrames) * 100
-			}
-		}
-	}
+	pct := parseProgressPct(text, totalFrames)
 	if pct > 0 {
 		if err := db.UpdateTask(r.DB, taskID, map[string]any{"progress": pct / 100, "status": "running"}); err != nil {
 			r.Logger.Warn("failed to update progress", "task", taskID, "error", err)
@@ -301,6 +290,30 @@ func updateProgress(r *Runner, taskID int64, text string, encodeStart time.Time,
 			db.UpdateTask(r.DB, taskID, map[string]any{"estimated_eta": strconv.Itoa(int(eta))})
 		}
 	}
+}
+
+// parseProgressPct extracts a progress percentage (0-100) from encoder stderr
+// text. Supports x265/x264 format and the ffmpeg "frame=N" format used by
+// hardware encoders (hevc_nvenc, h264_nvenc, qsv, amf).
+func parseProgressPct(text string, totalFrames int64) float64 {
+	var pct float64
+	lines := strings.Split(text, "\r")
+	for _, line := range lines {
+		if m := x265PercentRe.FindStringSubmatch(line); m != nil {
+			pct, _ = strconv.ParseFloat(m[1], 64)
+		} else if m := x264FrameRe.FindStringSubmatch(line); m != nil {
+			frames, _ := strconv.ParseInt(m[1], 10, 64)
+			if totalFrames > 0 {
+				pct = float64(frames) / float64(totalFrames) * 100
+			}
+		} else if m := ffmpegFrameRe.FindStringSubmatch(line); m != nil {
+			frames, _ := strconv.ParseInt(m[1], 10, 64)
+			if totalFrames > 0 {
+				pct = float64(frames) / float64(totalFrames) * 100
+			}
+		}
+	}
+	return pct
 }
 
 func calcETA(pct float64, encodeStart time.Time) int {

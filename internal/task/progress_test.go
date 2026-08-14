@@ -111,3 +111,19 @@ func TestParseProgressLargeFrameNumber(t *testing.T) {
 		t.Errorf("Percent with totalFrames=0 should be 0, got %f", pi.Percent)
 	}
 }
+
+func TestParseProgressPctFFmpegFrameFormat(t *testing.T) {
+	input := "frame=  800 fps=120.0 q=28.0 size=    1024kB time=00:00:33.00 bitrate=250.0kbits/s speed=1.5x"
+	pct := parseProgressPct(input, 1000)
+	if pct != 80.0 {
+		t.Fatalf("pct = %f, want 80.0", pct)
+	}
+}
+
+func TestParseProgressPctMixed(t *testing.T) {
+	input := "some noise\rframe=  250 fps=120.0 q=28.0 size=   512kB time=00:00:10.00 bitrate=400.0kbits/s speed=1.2x"
+	pct := parseProgressPct(input, 1000)
+	if pct != 25.0 {
+		t.Fatalf("pct = %f, want 25.0", pct)
+	}
+}
