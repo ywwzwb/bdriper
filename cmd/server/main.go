@@ -47,6 +47,12 @@ func main() {
 	taskHub := api.NewHub()
 
 	maxConcurrent := getEnvInt("MAX_CONCURRENT", 2)
+	// A saved max_concurrent setting overrides the environment variable.
+	if v, err := db.GetSetting(database, "max_concurrent"); err == nil && v != "" {
+		if n, aerr := strconv.Atoi(v); aerr == nil && n > 0 {
+			maxConcurrent = n
+		}
+	}
 	hubAdapter := &taskHubAdapter{hub: taskHub}
 	runner := task.NewRunner(database, logger, hubAdapter, maxConcurrent)
 

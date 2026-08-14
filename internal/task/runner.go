@@ -34,18 +34,59 @@ type Runner struct {
 	MaxConcurrent int
 	mu            sync.Mutex
 	running       map[int64]*runningTask
-	sem           chan struct{}
+	semMu         sync.Mutex
+	semFree       int
+	semFull       *sync.Cond
 }
 
 func NewRunner(database *sql.DB, logger *slog.Logger, hub ProgressBroadcaster, maxConcurrent int) *Runner {
-	return &Runner{
+	if maxConcurrent < 1 {
+		maxConcurrent = 1
+	}
+	r := &Runner{
 		DB:            database,
 		Logger:        logger,
 		Hub:           hub,
 		MaxConcurrent: maxConcurrent,
 		running:       make(map[int64]*runningTask),
-		sem:           make(chan struct{}, maxConcurrent),
+		semFree:       maxConcurrent,
 	}
+	r.semFull = sync.NewCond(&r.semMu)
+	return r
+}
+
+// acquireSlot blocks until a concurrent slot is available.
+func (r *Runner) acquireSlot() {
+	r.semMu.Lock()
+	defer r.semMu.Unlock()
+	for r.semFree <= 0 {
+		r.semFull.Wait()
+	}
+	r.semFree--
+}
+
+// releaseSlot frees a concurrent slot.
+func (r *Runner) releaseSlot() {
+	r.semMu.Lock()
+	r.semFree++
+	r.semFull.Signal()
+	r.semMu.Unlock()
+}
+
+// SetMaxConcurrent updates the maximum number of concurrently running tasks.
+func (r *Runner) SetMaxConcurrent(n int) {
+	if n < 1 {
+		n = 1
+	}
+	r.semMu.Lock()
+	used := r.MaxConcurrent - r.semFree
+	r.MaxConcurrent = n
+	r.semFree = n - used
+	if r.semFree < 0 {
+		r.semFree = 0
+	}
+	r.semFull.Broadcast()
+	r.semMu.Unlock()
 }
 
 func (r *Runner) Start(task *db.Task, files []db.FileEntry, cfg *db.TranscodeConfig) error {
@@ -61,8 +102,8 @@ func (r *Runner) Start(task *db.Task, files []db.FileEntry, cfg *db.TranscodeCon
 }
 
 func (r *Runner) run(task *db.Task, files []db.FileEntry, cfg *db.TranscodeConfig) {
-	r.sem <- struct{}{} // acquire slot first, may block goroutine but not HTTP handler
-	defer func() { <-r.sem }()
+	r.acquireSlot() // acquire slot first, may block goroutine but not HTTP handler
+	defer r.releaseSlot()
 	defer r.cleanup(task)
 	defer func() {
 		if rec := recover(); rec != nil {

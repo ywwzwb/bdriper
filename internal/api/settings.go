@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/zwb/bdriper/internal/db"
 )
@@ -30,6 +31,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to set setting", "key", k, "error", err)
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if k == "max_concurrent" && s.Runner != nil {
+			if n, err := strconv.Atoi(fmt.Sprint(v)); err == nil {
+				s.Runner.SetMaxConcurrent(n)
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
