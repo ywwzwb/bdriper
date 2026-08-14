@@ -82,7 +82,7 @@
             <div style="display:flex;align-items:center;gap:10px;">
               <h3 style="font-weight:600;font-size:16px;">{{ configDetail.name }}</h3>
               <span v-if="configDetail.isPreset" class="badge badge-pending">内置预设</span>
-              <span class="badge" :class="configDetail.mode === 'gpu' ? 'badge-running' : 'badge-pending'">{{ configDetail.mode === 'gpu' ? 'GPU' : 'CPU' }}</span>
+              <span class="badge" :class="configDetail.encoder_type === 'gpu' || configDetail.mode === 'gpu' ? 'badge-running' : 'badge-pending'">{{ configDetail.encoder_type === 'gpu' || configDetail.mode === 'gpu' ? 'GPU' : 'CPU' }}</span>
             </div>
             <button @click="configDetail = null" style="color:#8A8F98;font-size:20px;cursor:pointer;background:none;border:none;">✕</button>
           </div>

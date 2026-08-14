@@ -117,7 +117,7 @@
                   <div style="font-size:14px;font-weight:500;">{{ cfg.name }}
                     <span v-if="cfg.isPreset" class="badge" style="background:rgba(94,106,210,0.15);color:#5E6AD2;font-size:10px;padding:2px 6px;margin-left:6px;">内置</span>
                   </div>
-                  <div style="font-size:12px;color:#8A8F98;margin-top:2px;">{{ cfg.encoder || cfg.video_encoder }} | {{ cfg.mode === 'gpu' ? 'GPU' : 'CPU' }}</div>
+                  <div style="font-size:12px;color:#8A8F98;margin-top:2px;">{{ cfg.encoder || cfg.video_encoder }} | {{ (cfg.encoder_type === 'gpu' || cfg.mode === 'gpu') ? 'GPU' : 'CPU' }}</div>
                 </div>
               </label>
               <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;background:rgba(255,255,255,0.02);cursor:pointer;border:1px dashed rgba(255,255,255,0.1);"

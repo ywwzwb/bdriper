@@ -96,7 +96,7 @@
                 <span style="font-size:14px;font-weight:500;">{{ cfg.name }}</span>
                 <span v-if="cfg.isPreset" class="badge" style="background:rgba(94,106,210,0.15);color:#5E6AD2;font-size:11px;padding:2px 8px;">内置</span>
               </div>
-              <div style="font-size:12px;color:#8A8F98;margin-top:2px;">{{ cfg.encoder || cfg.video_encoder }} | {{ cfg.mode === 'gpu' ? 'GPU' : 'CPU' }}</div>
+              <div style="font-size:12px;color:#8A8F98;margin-top:2px;">{{ cfg.encoder || cfg.video_encoder }} | {{ isGpuConfig(cfg) ? 'GPU' : 'CPU' }}</div>
             </div>
             <div style="display:flex;gap:4px;">
               <button class="btn-ghost" style="padding:6px 12px;font-size:12px;" @click="viewConfigDetail(cfg)">查看</button>
@@ -124,7 +124,7 @@
             <div style="display:flex;align-items:center;gap:10px;">
               <h3 style="font-weight:600;font-size:16px;">{{ configDetail.name }}</h3>
               <span v-if="configDetail.isPreset" class="badge badge-pending">内置预设</span>
-              <span class="badge" :class="configDetail.mode === 'gpu' ? 'badge-running' : 'badge-pending'">{{ configDetail.mode === 'gpu' ? 'GPU' : 'CPU' }}</span>
+              <span class="badge" :class="isGpuConfig(configDetail) ? 'badge-running' : 'badge-pending'">{{ isGpuConfig(configDetail) ? 'GPU' : 'CPU' }}</span>
             </div>
             <button @click="configDetail = null" style="color:#8A8F98;font-size:20px;cursor:pointer;background:none;border:none;">✕</button>
           </div>
@@ -178,6 +178,12 @@ const configs = ref<any[]>([])
 const saved = ref(false)
 const error = ref('')
 const saving = ref(false)
+
+function isGpuConfig(cfg: any): boolean {
+  if (!cfg) return false
+  return cfg.encoder_type === 'gpu' || cfg.mode === 'gpu' ||
+    ((cfg.video_encoder || cfg.encoder || '').includes('nvenc') && cfg.encoder_type !== 'cpu' && cfg.mode !== 'cpu')
+}
 
 async function loadConfigs() {
   try {
